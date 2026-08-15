@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { buildStandalone } from '../scripts/build-standalone.mjs';
+import { getBuiltArtifact } from './helpers/built-artifact.js';
 import { validateBuild } from '../scripts/validate-build.mjs';
 import { dataRegionRegex } from '../src/persistence/markers.js';
 import { injectDataCapsuleIntoShell } from '../src/persistence/standalone-export.js';
@@ -106,7 +106,7 @@ const cardNames = (doc) => [...doc.querySelectorAll('.project-card .inline-name'
   .map(input => input.value);
 
 beforeAll(async () => {
-  buildResult = await buildStandalone();
+  buildResult = await getBuiltArtifact();
   builtHtml = await readFile(buildResult.path, 'utf8');
 }, 120000);
 

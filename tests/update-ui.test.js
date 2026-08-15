@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { buildStandalone } from '../scripts/build-standalone.mjs';
+import { getBuiltArtifact } from './helpers/built-artifact.js';
 import { REPOSITORY, createFakeGitHub, offlineFetch, reversionShell } from './helpers/fake-github.js';
 import { dataRegionRegex } from '../src/persistence/markers.js';
 import { injectDataCapsuleIntoShell } from '../src/persistence/standalone-export.js';
@@ -116,7 +116,7 @@ function readBlob(window, blob) {
 }
 
 beforeAll(async () => {
-  const build = await buildStandalone();
+  const build = await getBuiltArtifact();
   builtHtml = await readFile(build.path, 'utf8');
   releaseShell = reversionShell(builtHtml, { appVersion: '4.1.0', repository: REPOSITORY });
 }, 120000);

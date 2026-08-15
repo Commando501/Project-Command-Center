@@ -101,3 +101,12 @@ generated.
 git tag v4.0.0
 git push origin v4.0.0
 ```
+
+The build is byte-reproducible: given the same source and the same
+`PCC_REPO_SLUG`, Windows and Linux produce identical bytes. You can rebuild a
+tag yourself and confirm the digest matches the published manifest without
+trusting the release pipeline.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

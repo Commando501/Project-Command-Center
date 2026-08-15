@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { buildStandalone } from '../scripts/build-standalone.mjs';
+import { getBuiltArtifact } from './helpers/built-artifact.js';
 import { generateManifest } from '../scripts/generate-manifest.mjs';
 import { validateUpdateManifest } from '../src/updater/manifest.js';
 import { metadataRegionRegex } from '../src/persistence/markers.js';
@@ -11,7 +11,7 @@ let build;
 let metadata;
 
 beforeAll(async () => {
-  build = await buildStandalone();
+  build = await getBuiltArtifact();
   const html = await readFile(build.path, 'utf8');
   metadata = JSON.parse(html.match(metadataRegionRegex())[1]);
 }, 120000);

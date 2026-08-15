@@ -9,6 +9,10 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     restoreMocks: true,
-    include: ['tests/**/*.test.js']
+    include: ['tests/**/*.test.js'],
+    // Builds the standalone artifact once, before any worker starts. Suites
+    // read it through tests/helpers/built-artifact.js and never build their
+    // own, because parallel workers writing the same output path race.
+    globalSetup: ['tests/global-setup.js']
   }
 });
