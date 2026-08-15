@@ -1,5 +1,10 @@
 # Project Command Center v4 — Update Pipeline Design Specification
 
+> **Implemented.** This remains the statement of intent. Five points did not
+> survive contact with a browser and are amended in section 37 at the end;
+> read that alongside any section it touches. What actually exists is
+> described in `Project-Command-Center-v4-as-built.md`.
+
 **Date:** 2026-08-14  
 **Target:** Project Command Center standalone HTML application  
 **Primary distribution:** Public GitHub repository + GitHub Releases  
@@ -1022,3 +1027,106 @@ The following decisions are approved and considered fixed unless explicitly chan
 - User Data Capsule never needs to leave the browser.
 - Release manifest designed for future digital signatures.
 - Modular GitHub source tree compiled into a single standalone user artifact.
+
+---
+
+## 37. Amendments After Implementation
+
+Recorded rather than edited in place, so the original intent and the reason it
+changed both remain visible. Each was forced by observed behaviour, not
+preference.
+
+### 37.1 The manifest cannot be the only source of release metadata
+
+Sections 8 and 10 assume the application can read `update-manifest.json` from
+the release. It cannot, in the case that matters most.
+
+`api.github.com` sends `Access-Control-Allow-Origin: *`. Release asset URLs
+redirect to `objects.githubusercontent.com`, which sends no such header. A page
+opened from disk has the opaque origin `null`, so the browser blocks the read:
+
+```
+Access to fetch at 'https://github.com/.../update-manifest.json' from origin
+'null' has been blocked by CORS policy: No 'Access-Control-Allow-Origin'
+header is present on the requested resource.
+```
+
+Opening from disk is the normal way this application is used, so the manifest
+was unreadable exactly where it was needed, and discovery failed before it
+could compare versions.
+
+**Amendment.** Discovery reads the API response, which carries `tag_name`,
+`published_at`, `body`, and per-asset `size` and `digest`. The manifest is read
+when reachable and is authoritative when present. It is still published with
+every release, and is still the source of `schemaVersion` and
+`minSchemaVersion`, which the API cannot report.
+
+Verification is unchanged in strength: the expected digest comes from GitHub
+over TLS either way, and the asset digest is computed by GitHub over the stored
+bytes. A release publishing no digest at all is refused rather than offered
+unverified.
+
+### 37.2 One-click installation is impossible from disk
+
+Section 11 offers `[Install Update]` unconditionally. The same CORS boundary
+prevents the page from downloading the release, so from `file://` that button
+could only ever produce an error.
+
+**Amendment.** The review panel detects the protocol. From disk the button is
+not shown, `Download Release` becomes the primary action, and the three steps
+are listed before the first click: download the release, install it from file,
+then save the upgraded tracker. Served over http(s), the one-click flow in
+section 11 applies unchanged. Both routes use the same verification and the
+same migration pipeline.
+
+### 37.3 Schema compatibility is confirmed at install, not at discovery
+
+Following from 37.1, an API-only check cannot know the schema a release
+writes. Section 17 assumes it is known up front.
+
+**Amendment.** When the manifest is unreadable the review panel reports the
+target schema as unknown and states that compatibility is confirmed at
+install. This is safe, and arguably more correct: the candidate shell's own
+release metadata is authoritative, and the pipeline gates on it before
+anything is migrated. The manifest is a claim about the shell; the shell is
+the fact.
+
+### 37.4 Backups needed a consumer
+
+Sections 22 and 23 specify automatic backups as recovery layer two, and
+section 34 lists a restore wizard as a future extension. Shipping the export
+without any way to read it back made the layer nominal: the application
+produced a file nothing could consume.
+
+**Amendment.** `Import Data Backup` exists now. It reads both shapes the
+application has ever written, runs them through the same migration and
+validation engine an update uses, and replaces projects in memory only, so an
+unwanted restore is undone by closing the page without saving.
+
+### 37.5 Marker names cannot appear in source
+
+Not contemplated by the design, but now part of the contract. Because the
+application both contains and manipulates its own markers, any bundled source
+file containing a marker contiguously would put a second copy of the injection
+region into the released HTML.
+
+**Amendment.** `src/persistence/markers.js` owns every marker and assembles
+each from fragments at runtime; a test fails the build if any source file
+contains one. Relatedly, the plan's instruction to reject HTML containing
+multiple copies of a marker holds for the v4 markers but not the legacy ones:
+every genuine v3 file contains two legacy regions, so the extractor takes the
+first, which is the one v3 itself treats as authoritative.
+
+### 37.6 Things the design got right under pressure
+
+Worth recording, because these were tested rather than assumed:
+
+- Never overwriting the open file. The File System Access API is unavailable
+  from `file://` in any case, but the invariant also survives every failure
+  mode: a bad download, a failed verification, a failed migration, or a crash
+  mid-write all leave the original intact.
+- Transactional migration on a clone. Every abort path produces no output at
+  all, verified by test.
+- Separating app version from schema version.
+- Designing the manifest for future signatures, which left room to change
+  where the digest comes from without touching the format.

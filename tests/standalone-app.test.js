@@ -145,6 +145,16 @@ describe('the built artifact is self-contained', () => {
     expect(saved).toMatch(/<link[^>]+rel="icon"[^>]*href="data:image\/svg\+xml,/i);
   }, 60000);
 
+  test('every file input is hidden, since each is opened by a button', () => {
+    // One of these shipped without a display rule and rendered as a stray
+    // "Choose File" control in the middle of the page.
+    const inputs = [...builtHtml.matchAll(/<input id="([^"]+)" type="file"/g)].map(m => m[1]);
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const id of inputs) {
+      expect(builtHtml).toMatch(new RegExp(`#${id}[^{]*\\{[^}]*display:\\s*none`));
+    }
+  });
+
   test('styles disabled controls, so a refused action looks refused', () => {
     // Install Update is disabled while a download is blocked, and base progress
     // is disabled on a completed project. Without this the controls are inert

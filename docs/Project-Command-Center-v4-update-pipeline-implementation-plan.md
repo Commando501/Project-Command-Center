@@ -1,6 +1,28 @@
 # Project Command Center v4 Update Pipeline Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Executed and complete.** All 25 tasks are done and releases 4.0.0 through
+> 4.0.6 are published. This is kept as the historical record of how the work
+> was sequenced; it is no longer a to-do list, and its unchecked boxes should
+> not be read as outstanding work.
+>
+> Where the plan was wrong at the line-by-line level, the code diverged and the
+> reasons are recorded in `Project-Command-Center-v4-as-built.md`. The four
+> substantive ones:
+>
+> 1. **Task 5** says to reject HTML containing multiple copies of a marker.
+>    Every genuine v3 file contains two legacy marker regions, so that rule
+>    would reject every v3 file in existence. It holds for the v4 markers only.
+> 2. **Task 13** pins `X-GitHub-Api-Version: 2026-03-10`. GitHub answers 400
+>    for an unrecognised value, so no version header is sent.
+> 3. **Task 7's** validation list would abort an update for data v3 itself
+>    tolerates, such as a half-typed link URL. Validation splits errors from
+>    warnings instead.
+> 4. **Tasks 21 and 22** pin `actions/checkout@v6` and `actions/setup-node@v4`.
+>    Both were behind; the workflows use v7 and Node 22.
+>
+> The phase ordering was also changed: the v3 UI port (Task 19) was moved to
+> the front, so parity existed before any updater work and every later task ran
+> against the real application.
 
 **Goal:** Convert Project Command Center from a hand-maintained standalone HTML into a modular public GitHub project that still ships as one self-contained HTML file and can safely upgrade existing user data through verified GitHub Releases or manual update files.
 
