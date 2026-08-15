@@ -18,6 +18,7 @@ import { injectDataCapsuleIntoShell } from '../src/persistence/standalone-export
 
 let builtHtml;
 let releaseShell;
+let installedVersion;
 
 const CAPSULE = {
   schemaVersion: 4,
@@ -117,6 +118,7 @@ function readBlob(window, blob) {
 
 beforeAll(async () => {
   const build = await getBuiltArtifact();
+  installedVersion = build.appVersion;
   builtHtml = await readFile(build.path, 'utf8');
   releaseShell = reversionShell(builtHtml, { appVersion: '4.1.0', repository: REPOSITORY });
 }, 120000);
@@ -216,7 +218,7 @@ describe('the availability banner', () => {
     click(session, 'viewUpdateBtn');
 
     expect(visible(session, 'updateReviewPanel')).toBe(true);
-    expect(text(session, 'reviewInstalledVersion')).toBe('4.0.0');
+    expect(text(session, 'reviewInstalledVersion')).toBe(installedVersion);
     expect(text(session, 'reviewCandidateVersion')).toBe('4.1.0');
     expect(text(session, 'reviewSchema')).toBe('4 → 4');
     expect(text(session, 'reviewCompatibility')).toBe('Supported');
@@ -235,7 +237,7 @@ describe('installing an official update', () => {
     click(session, 'installUpdateBtn');
 
     await waitFor(() => visible(session, 'updateResultPanel'));
-    expect(text(session, 'resultOldVersion')).toBe('4.0.0');
+    expect(text(session, 'resultOldVersion')).toBe(installedVersion);
     expect(text(session, 'resultNewVersion')).toBe('4.1.0');
     expect(text(session, 'resultProjects')).toBe('1');
     expect(text(session, 'resultVerification')).toBe('Verified official release');
@@ -367,7 +369,7 @@ describe('update settings', () => {
     const session = boot(builtHtml, { fetchImpl: offlineFetch });
     click(session, 'updatesBtn');
 
-    expect(text(session, 'updateAppVersion')).toBe('4.0.0');
+    expect(text(session, 'updateAppVersion')).toBe(installedVersion);
     expect(text(session, 'updateSchemaVersion')).toBe('4');
     expect(text(session, 'updateChannelValue')).toBe('stable');
   });
@@ -424,7 +426,7 @@ describe('update settings', () => {
     click(session, 'exportBackupBtn');
 
     const backup = JSON.parse(await readBlob(session.window, session.captured[0]));
-    expect(backup).toMatchObject({ backupFormatVersion: 1, sourceAppVersion: '4.0.0' });
+    expect(backup).toMatchObject({ backupFormatVersion: 1, sourceAppVersion: installedVersion });
     expect(backup.data.projects[0].name).toBe('Existing Project');
   });
 });
