@@ -26,6 +26,15 @@ rollback copy.
   opens. If a newer version exists, a banner appears. Nothing downloads or
   installs on its own. Official updates require a SHA-256 match against the
   published release digest, and there is no way to skip that check.
+
+  When the app is opened from disk, the browser will not let the page fetch the
+  release file itself: `file:` URLs are their own opaque origin, and GitHub's
+  asset host sends no CORS header. So from disk the flow is **Download
+  Release**, then **Install Update From File**. The downloaded file is hashed
+  locally and compared against the digest GitHub publishes for that release, so
+  it still lands on *verified official* — the verification is identical, only
+  the transfer is manual. Served over http(s), the same update installs
+  directly.
 - **Offline** — **Updates → Install Update From File** accepts a release HTML
   you downloaded yourself. If the network is reachable, the file is verified
   against the official release of that version. If it cannot be verified, the

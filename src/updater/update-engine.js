@@ -10,7 +10,7 @@ import {
   getLatestStableRelease,
   getReleaseForVersion
 } from './github-release-client.js';
-import { compareSemver, isNewerVersion } from './version.js';
+import { compareSemver, isNewerVersion, versionFromTag } from './version.js';
 import { inspectReleaseShell, isSchemaSupportedByShell } from './shell-inspector.js';
 import { migrateToSchema } from './migrations.js';
 import { normalizeSha256, sha256Hex } from './sha256.js';
@@ -18,6 +18,67 @@ import { validateUpdateManifest } from './manifest.js';
 import { validateDataCapsule } from './validator.js';
 
 export const MANIFEST_ASSET_NAME = 'update-manifest.json';
+
+/**
+ * Release assets cannot be read from a file:// page.
+ *
+ * api.github.com sends Access-Control-Allow-Origin: *, but release asset URLs
+ * redirect to objects.githubusercontent.com, which does not. A page opened
+ * from disk has the opaque origin "null", so the browser blocks the read:
+ *
+ *   Access to fetch at 'https://github.com/.../update-manifest.json' from
+ *   origin 'null' has been blocked by CORS policy: No
+ *   'Access-Control-Allow-Origin' header is present on the requested resource.
+ *
+ * Opening from disk is the primary way this application is used, so anything
+ * required for an update check has to come from the API response itself.
+ * The manifest is still read when it is reachable, which it is whenever the
+ * app is served over http(s).
+ */
+export function isAssetFetchBlocked(error) {
+  return /failed to fetch|networkerror|load failed|cors/i.test(String(error?.message || ''));
+}
+
+/** Turns a release body into the release-notes lines the review panel shows. */
+function releaseNotesFromBody(body, limit = 12) {
+  return String(body || '')
+    .split('\n')
+    .map(line => line.replace(/^[\s*\-#>]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+/**
+ * Everything the updater needs about a candidate release, assembled from the
+ * manifest when it can be read and from the API response when it cannot.
+ *
+ * `expectedDigest` is the value the downloaded bytes must match. Both sources
+ * are GitHub's, delivered over TLS; the asset digest is computed by GitHub
+ * over the stored bytes, so falling back to it does not weaken verification.
+ *
+ * `schemaVersion` is null when only the API was available, because the API
+ * cannot report it. That is safe: the authoritative schema check reads the
+ * candidate shell's own metadata immediately before migrating anything.
+ */
+export function buildUpdateCandidate({ release, manifest, htmlAsset }) {
+  const fromManifest = Boolean(manifest);
+  return {
+    appVersion: fromManifest ? manifest.appVersion : versionFromTag(release?.tag_name),
+    publishedAt: fromManifest ? manifest.publishedAt : release?.published_at || '',
+    releaseNotes: fromManifest && manifest.releaseNotes?.length
+      ? manifest.releaseNotes
+      : releaseNotesFromBody(release?.body),
+    sizeBytes: htmlAsset?.size || 0,
+    expectedDigest: fromManifest
+      ? manifest.sha256
+      : normalizeSha256(htmlAsset?.digest),
+    digestSource: fromManifest ? 'manifest' : 'release-asset',
+    schemaVersion: fromManifest ? manifest.schemaVersion : null,
+    minSchemaVersion: fromManifest ? manifest.minSchemaVersion : null,
+    downloadUrl: htmlAsset?.browser_download_url || '',
+    assetName: htmlAsset?.name || ''
+  };
+}
 
 export class UpdateError extends Error {
   constructor(message, { stage = 'unknown' } = {}) {
@@ -56,24 +117,37 @@ export async function checkForOnlineUpdate({
   try {
     const release = await getLatestStableRelease(appMetadata.repository, fetchImpl);
 
+    // Preferred when readable, but a file:// page cannot fetch release assets,
+    // so a blocked manifest must not fail the whole check.
+    let manifest = null;
+    let manifestError = null;
     const manifestAsset = findReleaseAsset(release, MANIFEST_ASSET_NAME);
-    if (!manifestAsset) {
-      return { status: 'error', error: `The latest release has no ${MANIFEST_ASSET_NAME}.` };
+    if (manifestAsset) {
+      try {
+        const validation = validateUpdateManifest(await downloadJsonAsset(manifestAsset, fetchImpl));
+        if (validation.valid) manifest = validation.manifest;
+        else manifestError = `Release manifest is invalid: ${validation.errors.join('; ')}`;
+      } catch (error) {
+        if (!isAssetFetchBlocked(error)) throw error;
+        manifestError = 'The release manifest could not be read from this page, '
+          + 'so release details came from the GitHub API instead.';
+      }
     }
 
-    const validation = validateUpdateManifest(await downloadJsonAsset(manifestAsset, fetchImpl));
-    if (!validation.valid) {
-      return { status: 'error', error: `Release manifest is invalid: ${validation.errors.join('; ')}` };
+    const candidateVersion = manifest ? manifest.appVersion : versionFromTag(release?.tag_name);
+    if (!candidateVersion) {
+      return { status: 'error', error: `The latest release has no usable version (tag ${release?.tag_name}).` };
     }
-    const manifest = validation.manifest;
 
-    if (manifest.channel !== channel) {
+    // Only the manifest declares a channel. An API-only check trusts the
+    // stable channel it was pointed at, which is the only channel published.
+    if (manifest && manifest.channel !== channel) {
       return { status: 'current', reason: `The latest release is on the ${manifest.channel} channel.` };
     }
-    if (!isNewerVersion(manifest.appVersion, appMetadata.appVersion)) {
+    if (!isNewerVersion(candidateVersion, appMetadata.appVersion)) {
       return { status: 'current', installedVersion: appMetadata.appVersion };
     }
-    if (installedSchemaVersion < manifest.minSchemaVersion) {
+    if (manifest && installedSchemaVersion < manifest.minSchemaVersion) {
       return {
         status: 'incompatible',
         reason: `This file uses data schema ${installedSchemaVersion}, but version ${manifest.appVersion} `
@@ -82,12 +156,25 @@ export async function checkForOnlineUpdate({
       };
     }
 
-    const htmlAsset = findReleaseAsset(release, manifest.assetName);
+    const assetName = manifest
+      ? manifest.assetName
+      : `Project-Command-Center-v${candidateVersion}.html`;
+    const htmlAsset = findReleaseAsset(release, assetName);
     if (!htmlAsset) {
-      return { status: 'error', error: `The release does not contain ${manifest.assetName}.` };
+      return { status: 'error', error: `The release does not contain ${assetName}.` };
     }
 
-    return { status: 'available', release, manifest, htmlAsset };
+    const candidate = buildUpdateCandidate({ release, manifest, htmlAsset });
+    if (!candidate.expectedDigest) {
+      // Without a digest there is nothing to verify against, and an official
+      // update is never offered unverified.
+      return {
+        status: 'error',
+        error: 'The release publishes no SHA-256 digest, so this update cannot be verified.'
+      };
+    }
+
+    return { status: 'available', release, manifest, htmlAsset, candidate, manifestError };
   } catch (error) {
     // Offline, GitHub down, CORS blocked, rate limited: all non-blocking.
     return {
@@ -193,17 +280,33 @@ export function applyUpdatePipeline({
  */
 export async function prepareOfficialUpdate({
   currentCapsule,
-  manifest,
+  candidate,
   htmlAsset,
   appMetadata,
   fetchImpl = fetch,
   cryptoRef,
   nowIso = new Date().toISOString()
 }) {
-  const bytes = await downloadAssetBytes(htmlAsset, fetchImpl);
+  let bytes;
+  try {
+    bytes = await downloadAssetBytes(htmlAsset, fetchImpl);
+  } catch (error) {
+    if (isAssetFetchBlocked(error)) {
+      // Expected when the app runs from disk. The user can still download the
+      // release through the browser and install it from file, which verifies
+      // against the same digest.
+      throw new UpdateError(
+        'This page cannot download the release directly, because a file opened from disk '
+        + 'is not allowed to read files from another site. Use Download Release, then '
+        + 'Install Update From File to continue. Nothing has been changed.',
+        { stage: 'download-blocked' }
+      );
+    }
+    throw error;
+  }
 
   const actualDigest = await sha256Hex(bytes, cryptoRef);
-  const expectedDigest = normalizeSha256(manifest.sha256);
+  const expectedDigest = normalizeSha256(candidate.expectedDigest);
   if (actualDigest !== expectedDigest) {
     throw new UpdateError(
       'Update verification failed. The downloaded update does not match the expected release hash. '
@@ -225,17 +328,20 @@ export async function prepareOfficialUpdate({
   const shellHtml = decodeUtf8(bytes);
   const shellMetadata = inspectReleaseShell(shellHtml);
 
-  if (shellMetadata.appVersion !== manifest.appVersion) {
+  if (shellMetadata.appVersion !== candidate.appVersion) {
     throw new UpdateError(
-      `The downloaded file reports version ${shellMetadata.appVersion}, but the release manifest `
-      + `describes ${manifest.appVersion}. No project data was changed.`,
+      `The downloaded file reports version ${shellMetadata.appVersion}, but the release `
+      + `describes ${candidate.appVersion}. No project data was changed.`,
       { stage: 'verification' }
     );
   }
-  if (shellMetadata.schemaVersion !== manifest.schemaVersion) {
+  // Only the manifest declares a schema version. When the check ran from the
+  // API alone this is null, and the shell's own metadata is authoritative --
+  // applyUpdatePipeline gates on it before anything is migrated.
+  if (candidate.schemaVersion !== null && shellMetadata.schemaVersion !== candidate.schemaVersion) {
     throw new UpdateError(
       `The downloaded file writes data schema ${shellMetadata.schemaVersion}, but the release manifest `
-      + `declares ${manifest.schemaVersion}. No project data was changed.`,
+      + `declares ${candidate.schemaVersion}. No project data was changed.`,
       { stage: 'verification' }
     );
   }
@@ -253,7 +359,8 @@ export async function prepareOfficialUpdate({
     verification: {
       trust: 'verified-official',
       digest: actualDigest,
-      manifestDigestMatched: true,
+      digestSource: candidate.digestSource,
+      manifestDigestMatched: candidate.digestSource === 'manifest',
       assetDigestMatched: Boolean(htmlAsset?.digest)
     }
   };
@@ -308,8 +415,16 @@ export async function inspectManualUpdate(fileBytes, {
 
     let expected = null;
     if (manifestAsset) {
-      const validation = validateUpdateManifest(await downloadJsonAsset(manifestAsset, fetchImpl));
-      if (validation.valid) expected = validation.manifest.sha256;
+      try {
+        const validation = validateUpdateManifest(await downloadJsonAsset(manifestAsset, fetchImpl));
+        if (validation.valid) expected = validation.manifest.sha256;
+      } catch (error) {
+        // A file:// page cannot read release assets. Guarding this fetch on
+        // its own is what keeps the asset-digest fallback below reachable;
+        // without it the throw escapes to the outer catch and a perfectly
+        // verifiable file is reported as merely unverified.
+        if (!isAssetFetchBlocked(error)) throw error;
+      }
     }
     if (!expected && htmlAsset?.digest) expected = normalizeSha256(htmlAsset.digest);
 

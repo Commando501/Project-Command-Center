@@ -7,6 +7,7 @@ import { extractDataFromHtml } from '../src/persistence/extract.js';
 import { inspectReleaseShell } from '../src/updater/shell-inspector.js';
 import {
   UpdateError,
+  buildUpdateCandidate,
   applyUpdatePipeline,
   buildUpdateBackup,
   checkForOnlineUpdate,
@@ -14,6 +15,12 @@ import {
   prepareManualUpdate,
   prepareOfficialUpdate
 } from '../src/updater/update-engine.js';
+
+const candidateFor = (github) => buildUpdateCandidate({
+  release: github.release,
+  htmlAsset: github.release.assets.find(asset => asset.name.endsWith('.html')),
+  manifest: github.manifest
+});
 
 const APP_METADATA = {
   appVersion: '4.0.0',
@@ -152,29 +159,124 @@ describe('checkForOnlineUpdate', () => {
     expect(result.error).toMatch(/Could not reach the update server/);
   });
 
-  test('an invalid manifest is an error, not an offer to install', async () => {
+  test('an invalid manifest falls back to the digest GitHub publishes', async () => {
     const github = await createFakeGitHub({
       shellHtml: newerShell, manifestOverrides: { sha256: 'not-a-digest' }
     });
     const result = await checkForOnlineUpdate({
       appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
     });
-    expect(result.status).toBe('error');
-    expect(result.error).toMatch(/Release manifest is invalid/);
+
+    // The release asset digest is computed by GitHub over the stored bytes, so
+    // it is no weaker than a digest the release also publishes as a file.
+    expect(result.status).toBe('available');
+    expect(result.candidate.digestSource).toBe('release-asset');
+    expect(result.candidate.expectedDigest).toBe(github.digest);
+    expect(result.manifestError).toMatch(/Release manifest is invalid/);
   });
 
-  test('a release missing its manifest or html asset is an error', async () => {
-    const noManifest = await createFakeGitHub({ shellHtml: newerShell, omitManifestAsset: true });
-    expect((await checkForOnlineUpdate({
-      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: noManifest.fetchImpl
-    })).status).toBe('error');
-
-    const noHtml = await createFakeGitHub({ shellHtml: newerShell, omitHtmlAsset: true });
+  test('a missing manifest still yields a verifiable update', async () => {
+    const github = await createFakeGitHub({ shellHtml: newerShell, omitManifestAsset: true });
     const result = await checkForOnlineUpdate({
-      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: noHtml.fetchImpl
+      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
+    });
+    expect(result.status).toBe('available');
+    expect(result.candidate.appVersion).toBe('4.1.0');
+    expect(result.candidate.expectedDigest).toBe(github.digest);
+  });
+
+  test('a release missing its html asset is an error', async () => {
+    const github = await createFakeGitHub({ shellHtml: newerShell, omitHtmlAsset: true });
+    const result = await checkForOnlineUpdate({
+      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
     });
     expect(result.status).toBe('error');
     expect(result.error).toMatch(/does not contain/);
+  });
+
+  test('a release publishing no digest at all is refused', async () => {
+    // Nothing to verify against means no update is offered, ever.
+    const github = await createFakeGitHub({
+      shellHtml: newerShell, omitManifestAsset: true, includeAssetDigest: false
+    });
+    const result = await checkForOnlineUpdate({
+      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
+    });
+    expect(result.status).toBe('error');
+    expect(result.error).toMatch(/no SHA-256 digest.*cannot be verified/);
+  });
+});
+
+describe('a page that cannot read release assets, as when opened from disk', () => {
+  // api.github.com sends Access-Control-Allow-Origin; release assets on
+  // objects.githubusercontent.com do not. A file:// page has the opaque origin
+  // "null", so asset reads are blocked and only the API is usable.
+
+  test('the check still finds the update through the API alone', async () => {
+    const github = await createFakeGitHub({ shellHtml: newerShell, blockAssetFetch: true });
+    const result = await checkForOnlineUpdate({
+      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
+    });
+
+    expect(result.status).toBe('available');
+    expect(result.candidate.appVersion).toBe('4.1.0');
+    expect(result.candidate.expectedDigest).toBe(github.digest);
+    expect(result.candidate.digestSource).toBe('release-asset');
+    expect(result.candidate.downloadUrl).toContain('Project-Command-Center-v4.1.0.html');
+    expect(result.manifestError).toMatch(/could not be read from this page/);
+  });
+
+  test('schema details are unknown up front and confirmed before migrating', async () => {
+    const github = await createFakeGitHub({ shellHtml: newerShell, blockAssetFetch: true });
+    const result = await checkForOnlineUpdate({
+      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
+    });
+    expect(result.candidate.schemaVersion).toBeNull();
+    expect(result.candidate.minSchemaVersion).toBeNull();
+  });
+
+  test('installing directly reports the block as guidance, not a failure', async () => {
+    const github = await createFakeGitHub({ shellHtml: newerShell, blockAssetFetch: true });
+    const availability = await checkForOnlineUpdate({
+      appMetadata: APP_METADATA, preferences: PREFERENCES, fetchImpl: github.fetchImpl
+    });
+
+    await expect(prepareOfficialUpdate({
+      currentCapsule: CAPSULE,
+      candidate: availability.candidate,
+      htmlAsset: availability.htmlAsset,
+      appMetadata: APP_METADATA,
+      fetchImpl: github.fetchImpl
+    })).rejects.toMatchObject({ stage: 'download-blocked' });
+
+    await expect(prepareOfficialUpdate({
+      currentCapsule: CAPSULE,
+      candidate: availability.candidate,
+      htmlAsset: availability.htmlAsset,
+      appMetadata: APP_METADATA,
+      fetchImpl: github.fetchImpl
+    })).rejects.toThrow(/Use Download Release, then Install Update From File/);
+  });
+
+  test('a manually downloaded file still verifies against the API digest', async () => {
+    // This is the path that keeps the security guarantee intact from disk:
+    // the manifest is unreadable, but the digest comes from the API.
+    const github = await createFakeGitHub({ shellHtml: newerShell, blockAssetFetch: true });
+    const inspection = await inspectManualUpdate(github.bytes, {
+      repository: REPOSITORY, installedAppVersion: '4.0.0', fetchImpl: github.fetchImpl
+    });
+
+    expect(inspection.trust).toBe('verified-official');
+    expect(inspection.expectedDigest).toBe(github.digest);
+  });
+
+  test('a tampered file is still caught when only the API is reachable', async () => {
+    const github = await createFakeGitHub({ shellHtml: newerShell, blockAssetFetch: true });
+    const tampered = new TextEncoder().encode(`${newerShell}<!-- edited -->`);
+    const inspection = await inspectManualUpdate(tampered, {
+      repository: REPOSITORY, installedAppVersion: '4.0.0', fetchImpl: github.fetchImpl
+    });
+    expect(inspection.trust).toBe('verification-failed');
   });
 });
 
@@ -188,7 +290,7 @@ describe('prepareOfficialUpdate success path', () => {
     github = await createFakeGitHub({ shellHtml: newerShell });
     result = await prepareOfficialUpdate({
       currentCapsule: CAPSULE,
-      manifest: github.manifest,
+      candidate: candidateFor(github),
       htmlAsset: github.release.assets.find(asset => asset.name.endsWith('.html')),
       appMetadata: APP_METADATA,
       fetchImpl: github.fetchImpl,
@@ -254,7 +356,7 @@ describe('prepareOfficialUpdate abort paths', () => {
     const github = await createFakeGitHub({ shellHtml: newerShell, ...options });
     return prepareOfficialUpdate({
       currentCapsule: CAPSULE,
-      manifest: github.manifest,
+      candidate: candidateFor(github),
       htmlAsset: github.release.assets.find(asset => asset.name.endsWith('.html'))
         ?? { browser_download_url: 'https://example.com/missing.html' },
       appMetadata: APP_METADATA,
@@ -276,7 +378,7 @@ describe('prepareOfficialUpdate abort paths', () => {
     const asset = github.release.assets.find(a => a.name.endsWith('.html'));
     await expect(prepareOfficialUpdate({
       currentCapsule: CAPSULE,
-      manifest: github.manifest,
+      candidate: candidateFor(github),
       htmlAsset: { ...asset, digest: `sha256:${'0'.repeat(64)}` },
       appMetadata: APP_METADATA,
       fetchImpl: github.fetchImpl
@@ -285,7 +387,7 @@ describe('prepareOfficialUpdate abort paths', () => {
 
   test('a shell whose version disagrees with the manifest is refused', async () => {
     await expect(install({ manifestOverrides: { appVersion: '4.2.0' } }))
-      .rejects.toThrow(/reports version 4\.1\.0, but the release manifest describes 4\.2\.0/);
+      .rejects.toThrow(/reports version 4\.1\.0, but the release describes 4\.2\.0/);
   });
 
   test('a shell whose schema disagrees with the manifest is refused', async () => {
@@ -470,7 +572,7 @@ describe('prepareManualUpdate', () => {
     const github = await createFakeGitHub({ shellHtml: newerShell });
     const official = await prepareOfficialUpdate({
       currentCapsule: CAPSULE,
-      manifest: github.manifest,
+      candidate: candidateFor(github),
       htmlAsset: github.release.assets.find(asset => asset.name.endsWith('.html')),
       appMetadata: APP_METADATA,
       fetchImpl: github.fetchImpl,
