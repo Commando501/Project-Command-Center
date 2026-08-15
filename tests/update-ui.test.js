@@ -34,7 +34,7 @@ const CAPSULE = {
 };
 
 /** Boots the artifact with a configured repository and an injected fetch. */
-function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY } = {}) {
+function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY, withCrypto = true } = {}) {
   const configured = reversionShell(injectDataCapsuleIntoShell(html, capsule), { repository });
 
   const virtualConsole = new VirtualConsole();
@@ -55,7 +55,7 @@ function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY } = 
       // jsdom exposes crypto.getRandomValues but not crypto.subtle. Browsers
       // provide subtle on file:// pages, which count as secure contexts, and
       // the release-candidate smoke test confirms that in a real browser.
-      if (!window.crypto?.subtle) {
+      if (withCrypto && !window.crypto?.subtle) {
         Object.defineProperty(window, 'crypto', {
           value: webcrypto, configurable: true, writable: true
         });
@@ -267,6 +267,25 @@ describe('installing an official update', () => {
     expect(session.captured).toHaveLength(0);
     // The tracker is untouched.
     expect(session.document.querySelectorAll('.project-card')).toHaveLength(1);
+  });
+});
+
+describe('a browser without Web Crypto degrades honestly', () => {
+  // Verification is mandatory and cannot be skipped, so a browser that cannot
+  // hash must say so and refuse, never quietly install something unchecked.
+  test('the tracker still works and the install button is refused', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl, withCrypto: false });
+
+    // The tracker itself is unaffected.
+    expect(session.document.querySelectorAll('.project-card')).toHaveLength(1);
+
+    await waitFor(() => visible(session, 'updateBanner'));
+    click(session, 'viewUpdateBtn');
+
+    expect(text(session, 'reviewVerification')).toContain('cannot verify updates');
+    expect(session.document.getElementById('installUpdateBtn').disabled).toBe(true);
+    expect(session.captured).toHaveLength(0);
   });
 });
 
