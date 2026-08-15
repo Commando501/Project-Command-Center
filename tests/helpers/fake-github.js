@@ -26,7 +26,13 @@ export async function createFakeGitHub({
   includeAssetDigest = true,
   omitManifestAsset = false,
   omitHtmlAsset = false,
-  corruptBytes = false
+  corruptBytes = false,
+  /**
+   * Reproduces the real constraint on a file:// page: api.github.com sends
+   * Access-Control-Allow-Origin, release assets on objects.githubusercontent.com
+   * do not, so asset reads fail with a TypeError the way fetch does.
+   */
+  blockAssetFetch = false
 } = {}) {
   const assetName = `Project-Command-Center-v${version}.html`;
   const bytes = new TextEncoder().encode(shellHtml);
@@ -82,6 +88,9 @@ export async function createFakeGitHub({
 
     if (String(url).includes('/releases/latest') || String(url).includes('/releases/tags/')) {
       return respond(new TextEncoder().encode(JSON.stringify(release)), 'application/json');
+    }
+    if (blockAssetFetch && String(url).includes('/releases/download/')) {
+      throw new TypeError('Failed to fetch');
     }
     if (String(url).includes('update-manifest.json')) {
       return respond(new TextEncoder().encode(JSON.stringify(manifest)), 'application/json');

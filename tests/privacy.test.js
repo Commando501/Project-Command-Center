@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import { getBuiltArtifact } from './helpers/built-artifact.js';
 import { REPOSITORY, createFakeGitHub, reversionShell } from './helpers/fake-github.js';
 import {
+  buildUpdateCandidate,
   checkForOnlineUpdate,
   inspectManualUpdate,
   prepareOfficialUpdate
@@ -148,10 +149,15 @@ describe('update discovery sends no project data', () => {
 describe('installing an update sends no project data', () => {
   test('the whole download and migrate path stays private', async () => {
     const github = await createFakeGitHub({ shellHtml: newerShell });
+    const htmlAsset = github.release.assets.find(asset => asset.name.endsWith('.html'));
     const result = await prepareOfficialUpdate({
       currentCapsule: PRIVATE_CAPSULE,
-      manifest: github.manifest,
-      htmlAsset: github.release.assets.find(asset => asset.name.endsWith('.html')),
+      candidate: buildUpdateCandidate({
+        release: github.release,
+        htmlAsset,
+        manifest: github.manifest
+      }),
+      htmlAsset,
       appMetadata: APP_METADATA,
       fetchImpl: github.fetchImpl
     });

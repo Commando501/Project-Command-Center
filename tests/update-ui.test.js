@@ -272,6 +272,67 @@ describe('installing an official update', () => {
   });
 });
 
+describe('opened from disk, where release assets cannot be read', () => {
+  // Reproduces the real failure: from a file:// page the manifest fetch is
+  // blocked by CORS, which previously killed the whole check and showed
+  // "Update check failed: Could not download the release: Failed to fetch"
+  // with no banner at all.
+
+  test('the banner still appears, using the API digest', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell, blockAssetFetch: true });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+
+    await waitFor(() => visible(session, 'updateBanner'));
+    expect(text(session, 'updateBannerText')).toBe('Project Command Center 4.1.0 is available');
+  });
+
+  test('the review panel offers Download Release and explains the schema check', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell, blockAssetFetch: true });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+
+    await waitFor(() => visible(session, 'updateBanner'));
+    click(session, 'viewUpdateBtn');
+
+    expect(visible(session, 'downloadReleaseBtn')).toBe(true);
+    expect(session.document.getElementById('downloadReleaseBtn').getAttribute('href'))
+      .toContain('Project-Command-Center-v4.1.0.html');
+    expect(text(session, 'reviewSchema')).toContain('checked before migrating');
+    expect(text(session, 'reviewCompatibility')).toBe('Confirmed at install');
+  });
+
+  test('pressing Install explains the download route instead of erroring', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell, blockAssetFetch: true });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+
+    await waitFor(() => visible(session, 'updateBanner'));
+    click(session, 'viewUpdateBtn');
+    click(session, 'installUpdateBtn');
+
+    await waitFor(() => text(session, 'reviewVerification').includes('Install Update From File'));
+    expect(text(session, 'reviewVerification')).toContain('Nothing has been changed');
+    expect(visible(session, 'updateResultPanel')).toBe(false);
+    expect(session.captured).toHaveLength(0);
+  });
+
+  test('the downloaded file then installs and verifies from disk', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell, blockAssetFetch: true });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+
+    const input = session.document.getElementById('updateFileInput');
+    const file = new session.window.File([releaseShell], 'Project-Command-Center-v4.1.0.html', { type: 'text/html' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new session.window.Event('change', { bubbles: true }));
+
+    await waitFor(() => visible(session, 'updateReviewPanel'));
+    expect(text(session, 'reviewVerification')).toContain('Verified against the official 4.1.0 release');
+    expect(session.document.getElementById('installUpdateBtn').disabled).toBe(false);
+
+    click(session, 'installUpdateBtn');
+    await waitFor(() => visible(session, 'updateResultPanel'));
+    expect(text(session, 'resultVerification')).toBe('Verified official release');
+  });
+});
+
 describe('a browser without Web Crypto degrades honestly', () => {
   // Verification is mandatory and cannot be skipped, so a browser that cannot
   // hash must say so and refuse, never quietly install something unchecked.

@@ -41,7 +41,8 @@ export function initUpdateUi({
     'resultSummary', 'resultOldVersion', 'resultNewVersion', 'resultSchema',
     'resultProjects', 'resultImages', 'resultVerification', 'resultWarnings',
     'updateBackBtn', 'exportBackupBtn', 'installFromFileBtn', 'checkUpdatesBtn',
-    'confirmUnverifiedBtn', 'installUpdateBtn', 'downloadBackupBtn', 'downloadUpdatedBtn'
+    'confirmUnverifiedBtn', 'installUpdateBtn', 'downloadBackupBtn', 'downloadUpdatedBtn',
+    'downloadReleaseBtn'
   ].map(id => [id, $(id)]));
 
   let availability = null;
@@ -63,6 +64,9 @@ export function initUpdateUi({
     const review = name === 'updateReviewPanel';
     show(els.installUpdateBtn, review);
     show(els.confirmUnverifiedBtn, review && inspection?.trust === 'unverified-offline');
+    // Downloading through the browser is not subject to CORS, so this stays
+    // available for an online candidate even when a direct fetch is blocked.
+    show(els.downloadReleaseBtn, review && Boolean(availability?.candidate?.downloadUrl));
 
     const result = name === 'updateResultPanel';
     show(els.downloadBackupBtn, result && Boolean(prepared?.backup));
@@ -90,7 +94,8 @@ export function initUpdateUi({
   function describeAvailability(result) {
     switch (result.status) {
       case 'available':
-        return `Version ${result.manifest.appVersion} is available.`;
+        return `Version ${result.candidate.appVersion} is available.`
+          + (result.manifestError ? ` ${result.manifestError}` : '');
       case 'current':
         return result.reason || `Version ${appMetadata.appVersion} is the latest release.`;
       case 'incompatible':
@@ -105,7 +110,7 @@ export function initUpdateUi({
   }
 
   function showBanner(result) {
-    els.updateBannerText.textContent = `Project Command Center ${result.manifest.appVersion} is available`;
+    els.updateBannerText.textContent = `Project Command Center ${result.candidate.appVersion} is available`;
     show(els.updateBanner, true);
   }
 
@@ -143,19 +148,24 @@ export function initUpdateUi({
   }
 
   function openReview() {
-    const manifest = availability.manifest;
+    const candidate = availability.candidate;
     els.reviewInstalledVersion.textContent = appMetadata.appVersion;
-    els.reviewCandidateVersion.textContent = manifest.appVersion;
-    els.reviewSchema.textContent = `${state.schemaVersion} → ${manifest.schemaVersion}`;
-    els.reviewCompatibility.textContent = state.schemaVersion >= manifest.minSchemaVersion
-      ? 'Supported'
-      : 'Not supported';
-    els.reviewSize.textContent = availability.htmlAsset.size
-      ? formatBytes(availability.htmlAsset.size)
-      : 'Unknown';
-    els.reviewPublished.textContent = formatUpdated(manifest.publishedAt);
+    els.reviewCandidateVersion.textContent = candidate.appVersion;
+    // The schema a release writes is only declared by the manifest. When the
+    // check ran from the API alone it is unknown here, and the candidate
+    // file's own metadata is checked before anything is migrated.
+    els.reviewSchema.textContent = candidate.schemaVersion === null
+      ? `${state.schemaVersion} → checked before migrating`
+      : `${state.schemaVersion} → ${candidate.schemaVersion}`;
+    els.reviewCompatibility.textContent = candidate.minSchemaVersion === null
+      ? 'Confirmed at install'
+      : state.schemaVersion >= candidate.minSchemaVersion ? 'Supported' : 'Not supported';
+    els.reviewSize.textContent = candidate.sizeBytes ? formatBytes(candidate.sizeBytes) : 'Unknown';
+    els.reviewPublished.textContent = formatUpdated(candidate.publishedAt);
+    els.downloadReleaseBtn.href = candidate.downloadUrl || '#';
+    els.downloadReleaseBtn.setAttribute('download', candidate.assetName || '');
 
-    const notes = Array.isArray(manifest.releaseNotes) ? manifest.releaseNotes : [];
+    const notes = Array.isArray(candidate.releaseNotes) ? candidate.releaseNotes : [];
     els.reviewNotes.innerHTML = '';
     for (const note of notes.length ? notes : ['No release notes were provided.']) {
       const item = doc.createElement('li');
@@ -223,7 +233,7 @@ export function initUpdateUi({
     try {
       const result = await prepareOfficialUpdate({
         currentCapsule: toDataCapsule(state),
-        manifest: availability.manifest,
+        candidate: availability.candidate,
         htmlAsset: availability.htmlAsset,
         appMetadata,
         fetchImpl
@@ -231,9 +241,13 @@ export function initUpdateUi({
       showResult(result);
       showToast('Update prepared. Your current file was not modified.');
     } catch (error) {
-      // Nothing was produced and nothing was changed.
-      setVerification(error?.message || 'The update could not be completed.', 'failed');
-      els.installUpdateBtn.disabled = false;
+      // Nothing was produced and nothing was changed. A blocked download is
+      // the expected case from disk, and gets guidance rather than an error.
+      setVerification(
+        error?.message || 'The update could not be completed.',
+        error?.stage === 'download-blocked' ? 'unverified' : 'failed'
+      );
+      els.installUpdateBtn.disabled = error?.stage === 'download-blocked';
     } finally {
       busy = false;
     }
