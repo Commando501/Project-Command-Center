@@ -38,7 +38,7 @@ export function initUpdateUi({
     'prefAutoCheck', 'prefAutoBackup', 'prefChannel', 'updateStatusText',
     'reviewInstalledVersion', 'reviewCandidateVersion', 'reviewSchema', 'reviewCompatibility',
     'reviewSize', 'reviewPublished', 'reviewVerification', 'reviewNotes',
-    'resultSummary', 'resultOldVersion', 'resultNewVersion', 'resultSchema',
+    'resultSummary', 'resultNextSteps', 'resultOldVersion', 'resultNewVersion', 'resultSchema',
     'resultProjects', 'resultImages', 'resultVerification', 'resultWarnings',
     'updateBackBtn', 'exportBackupBtn', 'installFromFileBtn', 'checkUpdatesBtn',
     'confirmUnverifiedBtn', 'installUpdateBtn', 'downloadBackupBtn', 'downloadUpdatedBtn',
@@ -209,8 +209,23 @@ export function initUpdateUi({
     els.resultVerification.textContent = result.verification.trust === 'verified-official'
       ? 'Verified official release'
       : 'Unverified, used with explicit confirmation';
+    // The old copy said only "was created successfully", which reads as though
+    // the update already happened. Nothing has been written at this point, and
+    // a reader who closes the dialog here loses the work entirely.
     els.resultSummary.textContent =
-      `${result.report.newAppVersion} was created successfully. Your previous file was not modified.`;
+      `Your data has been migrated into version ${result.report.newAppVersion}, in memory. `
+      + 'Nothing has been written to disk yet.';
+
+    els.resultNextSteps.innerHTML = '';
+    for (const step of [
+      `Press Download Updated HTML to save ${result.outputFilename}, containing this file's projects.`,
+      'Open that new file from now on. It is your tracker from here.',
+      `This file, version ${result.report.oldAppVersion}, is left untouched so it stays as your rollback.`
+    ]) {
+      const item = doc.createElement('li');
+      item.textContent = step;
+      els.resultNextSteps.appendChild(item);
+    }
 
     const warnings = result.report.warnings || [];
     els.resultWarnings.innerHTML = '';

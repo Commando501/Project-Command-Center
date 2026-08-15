@@ -241,7 +241,18 @@ describe('installing an official update', () => {
     expect(text(session, 'resultNewVersion')).toBe('4.1.0');
     expect(text(session, 'resultProjects')).toBe('1');
     expect(text(session, 'resultVerification')).toBe('Verified official release');
-    expect(text(session, 'resultSummary')).toContain('previous file was not modified');
+
+    // The panel must say that nothing has happened yet and what to do next.
+    // Closing the dialog here loses the work, so "created successfully" alone
+    // was actively misleading.
+    expect(text(session, 'resultSummary')).toContain('Nothing has been written to disk yet');
+    const steps = [...session.document.querySelectorAll('#resultNextSteps li')]
+      .map(item => item.textContent);
+    expect(steps).toHaveLength(3);
+    expect(steps[0]).toContain('Download Updated HTML');
+    expect(steps[0]).toContain('Project-Command-Center-v4.1.0.html');
+    expect(steps[1]).toContain('Open that new file');
+    expect(steps[2]).toContain('rollback');
 
     // Producing the file still requires an explicit click.
     expect(session.captured).toHaveLength(0);

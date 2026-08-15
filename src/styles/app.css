@@ -636,3 +636,13 @@ textarea.control { min-height: 90px; resize: vertical; }
   .update-banner { align-items: flex-start; flex-direction: column; }
   .update-toggle select { margin-left: 0; width: 100%; }
 }
+
+.update-next-steps {
+  margin: 10px 0 16px;
+  padding-left: 22px;
+  color: var(--text);
+  font-size: .89rem;
+  line-height: 1.55;
+}
+.update-next-steps li { margin-bottom: 5px; }
+.update-next-steps li::marker { color: var(--accent); font-weight: 700; }
