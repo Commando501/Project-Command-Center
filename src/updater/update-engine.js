@@ -39,11 +39,35 @@ export function isAssetFetchBlocked(error) {
   return /failed to fetch|networkerror|load failed|cors/i.test(String(error?.message || ''));
 }
 
-/** Turns a release body into the release-notes lines the review panel shows. */
-function releaseNotesFromBody(body, limit = 12) {
+/**
+ * Turns a release body into readable review-panel lines.
+ *
+ * GitHub's auto-generated notes are markdown aimed at a repository page, not
+ * at a dialog: a "What's Changed" heading, one bullet per pull request with a
+ * "by @author in <url>" suffix, and a "Full Changelog" link. Rendered raw they
+ * read as a changelog dump, with markdown artifacts left behind.
+ */
+export function releaseNotesFromBody(body, limit = 12) {
   return String(body || '')
     .split('\n')
-    .map(line => line.replace(/^[\s*\-#>]+/, '').trim())
+    .map(line => line.trim())
+    .filter(line => line
+      // Section headings and the trailing changelog link are navigation for a
+      // web page, not descriptions of what changed.
+      && !/^#{1,6}\s/.test(line)
+      && !/^\*{0,2}full changelog\*{0,2}\s*:/i.test(line))
+    .map(line => line
+      // A list marker needs trailing whitespace to count, so the opening "**"
+      // of a bold span is not mistaken for one and eaten before it can pair.
+      .replace(/^\s*[-*+>]\s+/, '')
+      // Author and pull-request attribution, before bare urls are removed, or
+      // the "in <url>" tail would no longer match.
+      .replace(/\s+by\s+@[\w-]+(\s+in\s+\S+)?$/i, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .trim())
     .filter(Boolean)
     .slice(0, limit);
 }

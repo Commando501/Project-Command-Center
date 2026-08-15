@@ -13,7 +13,8 @@ import {
   checkForOnlineUpdate,
   inspectManualUpdate,
   prepareManualUpdate,
-  prepareOfficialUpdate
+  prepareOfficialUpdate,
+  releaseNotesFromBody
 } from '../src/updater/update-engine.js';
 
 const candidateFor = (github) => buildUpdateCandidate({
@@ -65,6 +66,62 @@ beforeAll(async () => {
   const html = await readFile(build.path, 'utf8');
   newerShell = reversionShell(html, { appVersion: '4.1.0', repository: REPOSITORY });
 }, 120000);
+
+describe('releaseNotesFromBody', () => {
+  // Verbatim from the v4.0.3 release, which is what the review panel showed.
+  const GITHUB_BODY = [
+    "## What's Changed",
+    '* Correct the claim that the icon suppresses a browser warning by @Commando501 in https://github.com/Commando501/Project-Command-Center/pull/5',
+    '* Release 4.0.3 by @Commando501 in https://github.com/Commando501/Project-Command-Center/pull/6',
+    '',
+    '',
+    '**Full Changelog**: https://github.com/Commando501/Project-Command-Center/compare/v4.0.2...v4.0.3'
+  ].join('\n');
+
+  test('reads as release notes rather than a changelog dump', () => {
+    expect(releaseNotesFromBody(GITHUB_BODY)).toEqual([
+      'Correct the claim that the icon suppresses a browser warning',
+      'Release 4.0.3'
+    ]);
+  });
+
+  test('drops headings and the full-changelog footer', () => {
+    const notes = releaseNotesFromBody(GITHUB_BODY);
+    expect(notes.join(' ')).not.toMatch(/What's Changed/);
+    expect(notes.join(' ')).not.toMatch(/Full Changelog/);
+  });
+
+  test('leaves no markdown artifacts or bare urls behind', () => {
+    const notes = releaseNotesFromBody([
+      '- **Bold item** with `code`',
+      '* A [linked thing](https://example.com/x) inline',
+      '+ Plain item by @someone'
+    ].join('\n'));
+
+    expect(notes).toEqual([
+      'Bold item with code',
+      'A linked thing inline',
+      'Plain item'
+    ]);
+    expect(notes.join(' ')).not.toMatch(/[*`\[\]]|https?:/);
+  });
+
+  test('keeps hand-written notes untouched', () => {
+    expect(releaseNotesFromBody('Added project timelines\nImproved image management'))
+      .toEqual(['Added project timelines', 'Improved image management']);
+  });
+
+  test('handles an empty or missing body', () => {
+    expect(releaseNotesFromBody('')).toEqual([]);
+    expect(releaseNotesFromBody(null)).toEqual([]);
+    expect(releaseNotesFromBody('## Only a heading')).toEqual([]);
+  });
+
+  test('caps the number of lines', () => {
+    const many = Array.from({ length: 40 }, (_v, i) => `item ${i}`).join('\n');
+    expect(releaseNotesFromBody(many, 5)).toHaveLength(5);
+  });
+});
 
 /* -------------------------------------------------------------- discovery */
 
