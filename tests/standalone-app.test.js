@@ -145,6 +145,15 @@ describe('the built artifact is self-contained', () => {
     expect(saved).toMatch(/<link[^>]+rel="icon"[^>]*href="data:image\/svg\+xml,/i);
   }, 60000);
 
+  test('styles disabled controls, so a refused action looks refused', () => {
+    // Install Update is disabled while a download is blocked, and base progress
+    // is disabled on a completed project. Without this the controls are inert
+    // but look identical to available ones.
+    expect(builtHtml).toMatch(/\.btn:disabled/);
+    expect(builtHtml).toMatch(/\.inline-control:disabled/);
+    expect(builtHtml).toMatch(/cursor:\s*not-allowed/);
+  });
+
   test('ships with an empty schema 4 capsule', () => {
     const capsule = JSON.parse(builtHtml.match(dataRegionRegex())[1]);
     expect(capsule).toEqual({

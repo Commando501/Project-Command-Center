@@ -88,6 +88,27 @@ a { color: var(--accent); }
 .btn.small { padding: 7px 10px; font-size: .88rem; }
 .btn.icon { padding: 5px 8px; min-width: 32px; }
 
+/*
+  A disabled control has to look disabled. Without this a refused action --
+  Install Update while a download is blocked, or base progress on a completed
+  project -- is inert but indistinguishable from an available one.
+*/
+.btn:disabled,
+.control:disabled,
+.inline-control:disabled,
+.compact-select:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.btn:disabled:hover {
+  transform: none;
+  border-color: var(--border);
+}
+.inline-control:disabled:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
 .save-note {
   display: flex;
   gap: 10px;
