@@ -124,6 +124,26 @@ describe('the built artifact is self-contained', () => {
     expect(builtHtml).not.toMatch(/https?:\/\/[^"'\s]*\.(?:js|css|woff2?|png|jpg|svg)/i);
   });
 
+  test('carries an embedded icon rather than probing for one', () => {
+    // Without a declared icon the browser looks for one beside the document,
+    // which on a file:// page logs an "unsafe attempt to load URL" warning
+    // because every file: URL is its own opaque origin.
+    const links = [...builtHtml.matchAll(/<link[^>]+rel\s*=\s*["']?icon["']?[^>]*>/gi)];
+    expect(links).toHaveLength(1);
+    expect(links[0][0]).toMatch(/href="data:image\/svg\+xml,/);
+    expect(links[0][0]).not.toMatch(/href\s*=\s*["']?https?:/i);
+  });
+
+  test('the icon survives a save, so a saved copy keeps it', async () => {
+    const populated = injectDataCapsuleIntoShell(builtHtml, CAPSULE);
+    const session = boot(populated);
+    session.document.querySelector('#saveHtmlBtn').dispatchEvent(
+      new session.window.Event('click', { bubbles: true })
+    );
+    const saved = await readBlob(session.window, session.captured[0]);
+    expect(saved).toMatch(/<link[^>]+rel="icon"[^>]*href="data:image\/svg\+xml,/i);
+  }, 60000);
+
   test('ships with an empty schema 4 capsule', () => {
     const capsule = JSON.parse(builtHtml.match(dataRegionRegex())[1]);
     expect(capsule).toEqual({

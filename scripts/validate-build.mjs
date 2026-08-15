@@ -42,6 +42,15 @@ export async function validateBuild(htmlPath, appVersion) {
   check(countOccurrences(html, LEGACY_DATA_END) === 0, 'Artifact contains a legacy v3 end marker.');
   check(countOccurrences(html, LEGACY_DATA_START_TOKEN) === 0, 'Artifact contains a legacy v3 marker token.');
 
+  // An icon is required, and it must be embedded. A file:// page with no icon
+  // makes the browser probe for one and log a cross-origin warning, and an
+  // icon loaded from anywhere else would break the self-contained guarantee.
+  const iconLinks = [...html.matchAll(/<link[^>]+rel\s*=\s*["']?icon["']?[^>]*>/gi)];
+  check(iconLinks.length === 1, `Expected exactly one icon link, found ${iconLinks.length}.`);
+  if (iconLinks.length === 1) {
+    check(/href\s*=\s*["']data:/i.test(iconLinks[0][0]), 'The icon is not an embedded data URI.');
+  }
+
   check(!/<script[^>]+\ssrc\s*=/i.test(html), 'Artifact loads an external script.');
   check(!/<link[^>]+rel\s*=\s*["']?stylesheet/i.test(html), 'Artifact loads an external stylesheet.');
   check(!/\ssrc\s*=\s*["']https?:/i.test(html), 'Artifact references a remote resource over http(s).');
