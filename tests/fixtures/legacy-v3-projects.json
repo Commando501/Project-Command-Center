@@ -1,0 +1,76 @@
+[
+  {
+    "id": "legacy-p1",
+    "name": "Solar Battery Rig",
+    "category": "Hardware",
+    "status": "Active",
+    "priority": "High",
+    "progress": 42,
+    "deadline": "2026-09-30",
+    "link": "https://example.com/solar-rig",
+    "nextAction": "Order the charge controller",
+    "tags": ["hardware", "urgent", "solar"],
+    "notes": "Budget is $500 & climbing.\nSpec at https://example.com/spec\nWatch the $& edge case.",
+    "contentItems": [
+      { "id": "l-i1", "type": "task", "text": "Bench test the cells", "completed": true },
+      { "id": "l-i2", "type": "task", "text": "Order the controller", "completed": true },
+      { "id": "l-i3", "type": "task", "text": "Assemble the frame", "completed": true },
+      { "id": "l-i4", "type": "task", "text": "Write the build log", "completed": false },
+      { "id": "l-i5", "type": "bullet", "text": "Consider a spare fuse block" },
+      { "id": "l-i6", "type": "link", "label": "Controller datasheet", "url": "https://example.com/datasheet.pdf" },
+      { "id": "l-i7", "type": "link", "label": "Half typed", "url": "htp://not-a-real-scheme" },
+      {
+        "id": "l-i8",
+        "type": "image",
+        "src": "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
+        "caption": "Prototype wiring, see https://example.com/wiring",
+        "filename": "prototype.webp",
+        "mimeType": "image/webp",
+        "width": 1600,
+        "height": 900,
+        "displayWidth": 640,
+        "originalWidth": 4032,
+        "originalHeight": 2268,
+        "sizeBytes": 54321,
+        "optimizedAt": "2026-08-01T10:00:00.000Z",
+        "optimizationCap": 1600
+      }
+    ],
+    "createdAt": "2026-01-15T09:00:00.000Z",
+    "updatedAt": "2026-08-01T10:05:00.000Z"
+  },
+  {
+    "id": "legacy-p2",
+    "name": "Research Notes",
+    "category": "",
+    "status": "Planning",
+    "priority": "Low",
+    "progress": 0,
+    "deadline": "",
+    "link": "",
+    "nextAction": "",
+    "tags": ["research"],
+    "notes": "",
+    "contentItems": [],
+    "createdAt": "2026-02-01T09:00:00.000Z",
+    "updatedAt": "2026-02-01T09:00:00.000Z"
+  },
+  {
+    "id": "legacy-p3",
+    "name": "Shipped Thing",
+    "category": "Business",
+    "status": "Complete",
+    "priority": "Medium",
+    "progress": 99,
+    "deadline": "2026-03-01",
+    "link": "https://example.com/shipped",
+    "nextAction": "Archive it",
+    "tags": ["business"],
+    "notes": "Done.",
+    "contentItems": [
+      { "id": "l-i9", "type": "task", "text": "Ship", "completed": true }
+    ],
+    "createdAt": "2026-01-01T09:00:00.000Z",
+    "updatedAt": "2026-03-01T09:00:00.000Z"
+  }
+]
