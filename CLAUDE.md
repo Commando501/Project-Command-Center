@@ -2,6 +2,7 @@
 
 Read these documents before implementation:
 
+@docs/Project-Command-Center-v4-as-built.md
 @docs/Project-Command-Center-v3-design.md
 @docs/Project-Command-Center-v4-update-pipeline-design.md
 @docs/Project-Command-Center-v4-update-pipeline-implementation-plan.md
@@ -15,10 +16,11 @@ The immutable v3 reference application is:
 If instructions conflict, use this order:
 
 1. CLAUDE.md locked invariants
-2. v4 update-pipeline design
-3. v4 implementation plan
-4. v3 design
-5. existing v3 implementation behavior
+2. v4 as-built document (what the code actually does)
+3. v4 update-pipeline design, including its section 37 amendments
+4. v4 implementation plan (executed; historical)
+5. v3 design
+6. existing v3 implementation behavior
 
 ## Product invariant
 
