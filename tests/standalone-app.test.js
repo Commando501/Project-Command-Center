@@ -124,10 +124,11 @@ describe('the built artifact is self-contained', () => {
     expect(builtHtml).not.toMatch(/https?:\/\/[^"'\s]*\.(?:js|css|woff2?|png|jpg|svg)/i);
   });
 
-  test('carries an embedded icon rather than probing for one', () => {
-    // Without a declared icon the browser looks for one beside the document,
-    // which on a file:// page logs an "unsafe attempt to load URL" warning
-    // because every file: URL is its own opaque origin.
+  test('carries an embedded icon, never an external one', () => {
+    // The icon exists so the application has one, and must be embedded to keep
+    // the artifact self-contained. It does not affect the "unsafe attempt to
+    // load URL" warning Chrome logs for file:// pages, which reproduces with
+    // the legacy v3 file and is therefore not caused by this application.
     const links = [...builtHtml.matchAll(/<link[^>]+rel\s*=\s*["']?icon["']?[^>]*>/gi)];
     expect(links).toHaveLength(1);
     expect(links[0][0]).toMatch(/href="data:image\/svg\+xml,/);
