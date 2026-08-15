@@ -2,6 +2,7 @@
   "name": "project-command-center",
   "version": "4.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Self-contained single-file project tracker with a verified update pipeline.",
   "scripts": {
