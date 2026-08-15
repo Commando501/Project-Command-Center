@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Project Command Center v3</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a2f;
+      --panel-2: #18233d;
+      --panel-3: #0e1628;
+      --text: #eef3ff;
+      --muted: #9daccc;
+      --border: #2a385d;
+      --accent: #6ea8fe;
+      --accent-2: #8b5cf6;
+      --success: #37c98b;
+      --warning: #f4b942;
+      --danger: #ff6b72;
+      --shadow: 0 14px 40px rgba(0,0,0,.22);
+      --radius: 16px;
+    }
+
+    body.light {
+      --bg: #f3f6fb;
+      --panel: #ffffff;
+      --panel-2: #f6f8fc;
+      --panel-3: #eef2f8;
+      --text: #172036;
+      --muted: #66728a;
+      --border: #d9e0ec;
+      --accent: #316fea;
+      --accent-2: #6d46d9;
+      --success: #13885c;
+      --warning: #b77908;
+      --danger: #cf3e48;
+      --shadow: 0 12px 30px rgba(28,45,78,.10);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 14%, transparent), transparent 28rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--accent); }
+
+    .shell {
+      width: min(1500px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 50px;
+    }
+
+    .topbar {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+    .title-wrap h1 {
+      margin: 0;
+      font-size: clamp(1.45rem, 2.8vw, 2.3rem);
+      letter-spacing: -.035em;
+    }
+    .title-wrap p { margin: 6px 0 0; color: var(--muted); }
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 11px;
+      transition: .15s ease;
+      text-decoration: none;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .btn.primary { border-color: var(--accent); background: var(--accent); color: white; }
+    .btn.danger { color: var(--danger); }
+    .btn.ghost { background: transparent; }
+    .btn.small { padding: 7px 10px; font-size: .88rem; }
+    .btn.icon { padding: 5px 8px; min-width: 32px; }
+
+    .save-note {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
+      background: color-mix(in srgb, var(--warning) 8%, var(--panel));
+      border-radius: 12px;
+      padding: 10px 13px;
+      margin-bottom: 18px;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+    .save-note strong { color: var(--text); }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .metric .label { color: var(--muted); font-size: .84rem; margin-bottom: 6px; }
+    .metric .value { font-size: 1.72rem; font-weight: 750; letter-spacing: -.035em; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.6fr) repeat(3, minmax(135px, .7fr)) auto;
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow);
+    }
+
+    .active-tag-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      min-height: 40px;
+      margin-bottom: 18px;
+      padding: 4px 2px;
+    }
+    .active-tag-label { color: var(--muted); font-size: .82rem; margin-right: 2px; }
+
+    .control {
+      width: 100%;
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: var(--panel-2);
+      border-radius: 10px;
+      padding: 10px 11px;
+      outline: none;
+    }
+    .control:focus, .inline-control:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .view-switch { display: flex; gap: 6px; align-items: center; }
+
+    .project-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .project-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .project-card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+
+    .card-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .inline-control {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 7px;
+      outline: none;
+      min-width: 0;
+      transition: .15s ease;
+    }
+    .inline-control:hover { background: var(--panel-2); border-color: var(--border); }
+    .inline-control:focus { background: var(--panel-2); }
+    .inline-name { width: 100%; font-size: 1.08rem; font-weight: 750; letter-spacing: -.01em; }
+    .inline-category { width: 100%; color: var(--muted); font-size: .85rem; margin-top: 2px; }
+    .inline-next { width: 100%; padding: 3px 0; }
+    .inline-tags-input { width: 100%; font-size: .82rem; margin-top: 9px; border-color: var(--border); background: var(--panel-2); }
+    .inline-date { width: 152px; color-scheme: dark; }
+    body.light .inline-date { color-scheme: light; }
+    .inline-number { width: 76px; text-align: right; }
+
+    .quick-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .compact-field { display: grid; gap: 4px; }
+    .compact-field label { color: var(--muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .045em; }
+    .compact-select {
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 9px;
+      width: 100%;
+    }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      font-size: .78rem;
+      white-space: nowrap;
+    }
+    .status-active { color: var(--accent); }
+    .status-planning { color: var(--warning); }
+    .status-blocked { color: var(--danger); }
+    .status-complete { color: var(--success); }
+    .priority-high { color: var(--danger); }
+    .priority-medium { color: var(--warning); }
+    .priority-low { color: var(--muted); }
+
+    .progress-row { margin-top: 15px; }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: .82rem;
+      margin-bottom: 6px;
+    }
+    .progress-value { color: var(--text); font-size: .97rem; }
+    .progress-track {
+      height: 9px;
+      background: var(--panel-2);
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: inherit;
+      transition: width .18s ease;
+    }
+    .base-progress-edit { display: flex; align-items: center; gap: 5px; }
+    .base-progress-edit span { font-size: .78rem; }
+
+    .next-action {
+      margin-top: 14px;
+      border-left: 3px solid var(--accent);
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
+      border-radius: 0 9px 9px 0;
+      font-size: .9rem;
+    }
+    .next-action strong { display: block; font-size: .72rem; color: var(--muted); margin-bottom: 2px; }
+
+    .meta { display: grid; gap: 7px; margin-top: 13px; color: var(--muted); font-size: .84rem; }
+    .meta-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+    .meta-row span:last-child { color: var(--text); text-align: right; overflow-wrap: anywhere; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+    .tag {
+      font-size: .76rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: transparent;
+      border-radius: 999px;
+      padding: 5px 8px;
+      cursor: pointer;
+    }
+    .tag:hover { border-color: var(--accent); color: var(--text); }
+    .tag.active { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent); }
+    .tag-filter-chip { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); }
+
+    .card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+    .project-details {
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+    .project-details > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: .84rem;
+      user-select: none;
+    }
+    .project-details > summary::-webkit-details-marker { display: none; }
+    .project-details > summary::after { content: '▾'; color: var(--accent); }
+    .project-details[open] > summary::after { content: '▴'; }
+
+    .details-body { padding-top: 12px; display: grid; gap: 12px; }
+    .section-label { color: var(--muted); font-size: .72rem; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+    .inline-notes { min-height: 82px; resize: vertical; font-size: .88rem; }
+
+    .nested-list { display: grid; gap: 7px; }
+    .nested-item {
+      display: grid;
+      grid-template-columns: auto minmax(0,1fr) auto;
+      gap: 7px;
+      align-items: center;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      border-radius: 9px;
+      padding: 6px 7px;
+    }
+    .nested-marker { width: 20px; text-align: center; color: var(--muted); }
+    .nested-check { width: 17px; height: 17px; accent-color: var(--accent); }
+    .nested-text { width: 100%; padding: 5px 6px; border-radius: 7px; }
+    .nested-item.completed .nested-text { text-decoration: line-through; color: var(--muted); }
+    .nested-empty { color: var(--muted); font-size: .84rem; border: 1px dashed var(--border); border-radius: 9px; padding: 10px; text-align: center; }
+
+    .add-nested {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) repeat(4,auto);
+      gap: 7px;
+    }
+    .task-summary { color: var(--muted); font-size: .78rem; }
+    .version-chip { font-size: .65em; color: var(--accent); font-weight: 700; vertical-align: middle; }
+    .linked-preview {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .linked-preview:empty { display: none; }
+    .linked-preview a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    .content-link {
+      display: grid;
+      grid-template-columns: minmax(120px,.7fr) minmax(180px,1.3fr) auto auto;
+      gap: 7px;
+      align-items: center;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      border-radius: 10px;
+      padding: 7px;
+    }
+    .content-image-block {
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      border-radius: 12px;
+      padding: 10px;
+      overflow: hidden;
+    }
+    .image-frame {
+      position: relative;
+      max-width: 100%;
+      min-width: 120px;
+      margin: 0 auto 9px 0;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg) 74%, var(--panel));
+    }
+    .embedded-image {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      cursor: zoom-in;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    .resize-handle {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.45);
+      background: rgba(10,15,28,.76);
+      color: white;
+      border-radius: 7px;
+      cursor: nwse-resize;
+      touch-action: none;
+      user-select: none;
+      font-size: .9rem;
+    }
+    .image-caption { width: 100%; margin-top: 2px; }
+    .image-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: .75rem;
+      margin-top: 8px;
+    }
+    .image-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .storage-summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--accent) 5%, var(--panel-2));
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .storage-summary strong { color: var(--text); }
+    .media-processing { opacity: .72; pointer-events: none; }
+    #mediaFileInput { display: none; }
+    .lightbox-dialog {
+      width: min(96vw, 1400px);
+      max-height: 94vh;
+      background: #080b12;
+      padding: 12px;
+      overflow: auto;
+    }
+    .lightbox-wrap { position: relative; display: grid; place-items: center; min-height: 200px; }
+    .lightbox-wrap img { max-width: 100%; max-height: 82vh; width: auto; height: auto; object-fit: contain; }
+    .lightbox-close { position: sticky; top: 0; margin-left: auto; z-index: 2; }
+    .lightbox-caption { color: #d9e2f5; padding: 8px 4px 2px; text-align: center; overflow-wrap: anywhere; }
+    .reopt-options { display: grid; gap: 10px; padding: 18px 20px; }
+    .reopt-options p { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+
+    .empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 20px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 55%, transparent);
+    }
+    .empty h2 { color: var(--text); margin: 0 0 8px; font-size: 1.2rem; }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-size: .8rem; font-weight: 650; }
+    td { font-size: .9rem; }
+    tr:last-child td { border-bottom: 0; }
+    .table-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .hidden { display: none !important; }
+
+    dialog {
+      width: min(760px, calc(100% - 24px));
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 0;
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 25px 80px rgba(0,0,0,.45);
+    }
+    dialog::backdrop { background: rgba(0,0,0,.62); backdrop-filter: blur(3px); }
+    .modal-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+    .modal-head h2 { margin: 0; font-size: 1.16rem; }
+    .modal-body { padding: 20px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .field { display: grid; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: var(--muted); font-size: .82rem; font-weight: 650; }
+    textarea.control { min-height: 90px; resize: vertical; }
+    .modal-actions { display: flex; justify-content: space-between; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--border); }
+    .modal-actions-right { display: flex; gap: 8px; }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      max-width: min(390px, calc(100% - 36px));
+      padding: 11px 14px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: .2s ease;
+      z-index: 20;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .unsaved-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warning); margin-right: 6px; opacity: 0; }
+    .unsaved-dot.show { opacity: 1; }
+
+    @media (max-width: 1080px) {
+      .dashboard { grid-template-columns: repeat(3, 1fr); }
+      .project-grid { grid-template-columns: repeat(2, 1fr); }
+      .toolbar { grid-template-columns: 1fr 1fr 1fr; }
+      .toolbar .search { grid-column: 1 / -1; }
+    }
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 20px, 1500px); padding-top: 14px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .top-actions { justify-content: flex-start; }
+      .dashboard { grid-template-columns: repeat(2, 1fr); }
+      .project-grid { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: 1fr 1fr; }
+      .toolbar .search { grid-column: 1 / -1; }
+      .view-switch { grid-column: 1 / -1; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .modal-actions { flex-direction: column-reverse; }
+      .modal-actions-right { justify-content: stretch; }
+      .modal-actions-right .btn { flex: 1; }
+      .add-nested { grid-template-columns: 1fr 1fr; }
+      .add-nested input { grid-column: 1 / -1; }
+      .content-link { grid-template-columns: 1fr auto; }
+      .content-link .link-label, .content-link .link-url { grid-column: 1 / -1; }
+      .image-controls .btn { flex: 1 1 auto; }
+      .resize-handle { width: 34px; height: 34px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>Project Command Center <span class="version-chip">v3</span></h1>
+        <p>Inline editing, nested task progress, and one-file portability.</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="themeBtn" type="button">Toggle Theme</button>
+        <button class="btn" id="backupBtn" type="button">Export JSON Backup</button>
+        <button class="btn primary" id="saveHtmlBtn" type="button">Save Updated HTML</button>
+        <button class="btn primary" id="addProjectBtn" type="button">+ Add Project</button>
+      </div>
+    </header>
+
+    <div class="save-note">
+      <span class="unsaved-dot" id="unsavedDot"></span>
+      <div><strong id="saveStateText">All embedded data is current.</strong> Inline changes stay in memory while this page is open. Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.</div>
+    </div>
+
+    <section class="dashboard" aria-label="Project summary">
+      <div class="metric"><div class="label">Total Projects</div><div class="value" id="metricTotal">0</div></div>
+      <div class="metric"><div class="label">Active</div><div class="value" id="metricActive">0</div></div>
+      <div class="metric"><div class="label">Planning</div><div class="value" id="metricPlanning">0</div></div>
+      <div class="metric"><div class="label">Blocked</div><div class="value" id="metricBlocked">0</div></div>
+      <div class="metric"><div class="label">Completed</div><div class="value" id="metricComplete">0</div></div>
+    </section>
+
+    <section class="toolbar" aria-label="Project filters">
+      <input class="control search" id="searchInput" type="search" placeholder="Search projects, notes, tags, tasks, next actions..." aria-label="Search projects" />
+      <select class="control" id="statusFilter" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        <option>Planning</option>
+        <option>Active</option>
+        <option>Blocked</option>
+        <option>On Hold</option>
+        <option>Complete</option>
+      </select>
+      <select class="control" id="priorityFilter" aria-label="Filter by priority">
+        <option value="">All priorities</option>
+        <option>High</option>
+        <option>Medium</option>
+        <option>Low</option>
+      </select>
+      <select class="control" id="sortSelect" aria-label="Sort projects">
+        <option value="updated-desc">Recently updated</option>
+        <option value="name-asc">Name A–Z</option>
+        <option value="priority-desc">Priority</option>
+        <option value="progress-desc">Progress</option>
+        <option value="deadline-asc">Deadline</option>
+      </select>
+      <div class="view-switch">
+        <button class="btn small primary" id="cardViewBtn" type="button">Cards</button>
+        <button class="btn small" id="tableViewBtn" type="button">Table</button>
+      </div>
+    </section>
+
+    <section id="activeTagBar" class="active-tag-bar hidden" aria-label="Active tag filters"></section>
+    <section id="cardView" class="project-grid" aria-live="polite"></section>
+
+    <section id="tableView" class="table-wrap hidden" aria-live="polite">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th><th>Status</th><th>Priority</th><th>Progress</th><th>Next Action</th><th>Tags</th><th>Deadline</th><th>Updated</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="projectTableBody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <dialog id="projectDialog">
+    <div class="modal-head">
+      <h2 id="dialogTitle">Add Project</h2>
+      <button class="btn small" id="closeDialogBtn" type="button" aria-label="Close dialog">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field full"><label for="projectName">Project name *</label><input class="control" id="projectName" type="text" maxlength="140" /></div>
+        <div class="field"><label for="projectCategory">Category</label><input class="control" id="projectCategory" type="text" maxlength="80" placeholder="Business, Game Dev, Hardware..." /></div>
+        <div class="field"><label for="projectStatus">Status</label><select class="control" id="projectStatus"><option>Planning</option><option>Active</option><option>Blocked</option><option>On Hold</option><option>Complete</option></select></div>
+        <div class="field"><label for="projectPriority">Priority</label><select class="control" id="projectPriority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+        <div class="field"><label for="projectProgress">Base progress: <span id="progressReadout">0%</span></label><input class="control" id="projectProgress" type="range" min="0" max="99" step="1" value="0" /></div>
+        <div class="field"><label for="projectDeadline">Deadline</label><input class="control" id="projectDeadline" type="date" /></div>
+        <div class="field"><label for="projectLink">Primary link</label><input class="control" id="projectLink" type="url" placeholder="https://..." /></div>
+        <div class="field full"><label for="projectNextAction">Next action</label><input class="control" id="projectNextAction" type="text" maxlength="240" placeholder="The single next thing that moves this project forward" /></div>
+        <div class="field full"><label for="projectTags">Tags</label><input class="control" id="projectTags" type="text" maxlength="240" placeholder="hardware, research, urgent (comma separated)" /></div>
+        <div class="field full"><label for="projectNotes">Notes</label><textarea class="control" id="projectNotes" placeholder="Key details, blockers, decisions, links, ideas..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger hidden" id="deleteProjectBtn" type="button">Delete Project</button>
+      <div class="modal-actions-right"><button class="btn" id="cancelProjectBtn" type="button">Cancel</button><button class="btn primary" id="saveProjectBtn" type="button">Save Project</button></div>
+    </div>
+  </dialog>
+
+  <input id="mediaFileInput" type="file" accept="image/*" aria-hidden="true" />
+
+  <dialog id="reoptDialog">
+    <div class="modal-head">
+      <h2>Re-optimize Image</h2>
+      <button class="btn small" id="closeReoptBtn" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="reopt-options">
+      <p>The full original is not stored in the project. Choose a target and reselect the source image so it can be encoded again at higher resolution.</p>
+      <label class="field"><span>Maximum long edge</span>
+        <select class="control" id="reoptCap">
+          <option value="1600">1600 px</option>
+          <option value="2400" selected>2400 px</option>
+          <option value="3200">3200 px</option>
+          <option value="source">Preserve source dimensions</option>
+        </select>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <span></span><div class="modal-actions-right"><button class="btn" id="cancelReoptBtn" type="button">Cancel</button><button class="btn primary" id="chooseReoptSourceBtn" type="button">Choose Source Image</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="lightboxDialog" class="lightbox-dialog">
+    <button class="btn lightbox-close" id="closeLightboxBtn" type="button">Close</button>
+    <div class="lightbox-wrap"><img id="lightboxImage" alt="Expanded project image"></div>
+    <div class="lightbox-caption" id="lightboxCaption"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const EMBEDDED_PROJECTS = /*__PROJECT_DATA_START__*/[]/*__PROJECT_DATA_END__*/;
+
+    /*__PURE_LOGIC_START__*/
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function makeId() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+      return 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+    }
+
+    function normalizeContentItem(item) {
+      const source = item || {};
+      const rawType = String(source.type || 'task');
+      const type = ['task','bullet','link','image'].includes(rawType) ? rawType : 'task';
+      const id = String(source.id || makeId());
+      if (type === 'link') {
+        return { id, type, label:String(source.label || ''), url:String(source.url || '') };
+      }
+      if (type === 'image') {
+        const width = Math.max(0, Math.trunc(Number(source.width) || 0));
+        const height = Math.max(0, Math.trunc(Number(source.height) || 0));
+        const rawDisplayWidth = source.displayWidth;
+        return {
+          id, type,
+          src:/^data:image\/(?:png|jpeg|webp|avif|gif);/i.test(String(source.src || '')) ? String(source.src || '') : '',
+          caption:String(source.caption || ''),
+          filename:String(source.filename || 'image'),
+          mimeType:String(source.mimeType || ''),
+          width,
+          height,
+          displayWidth:rawDisplayWidth === null || rawDisplayWidth === '' || rawDisplayWidth === undefined ? null : Math.max(80, Math.trunc(Number(rawDisplayWidth) || width || 80)),
+          originalWidth:Math.max(0, Math.trunc(Number(source.originalWidth) || width)),
+          originalHeight:Math.max(0, Math.trunc(Number(source.originalHeight) || height)),
+          sizeBytes:Math.max(0, Math.trunc(Number(source.sizeBytes) || 0)),
+          optimizedAt:String(source.optimizedAt || ''),
+          optimizationCap:source.optimizationCap === 'source' ? 'source' : Math.max(0, Math.trunc(Number(source.optimizationCap) || 1600))
+        };
+      }
+      return { id, type, text:String(source.text || ''), completed:type === 'task' ? Boolean(source.completed) : false };
+    }
+
+    function contentItemHasMeaningfulData(item) {
+      if (!item) return false;
+      if (item.type === 'image') return /^data:image\/(?:png|jpeg|webp|avif|gif);/i.test(String(item.src || ''));
+      if (item.type === 'link') return Boolean(String(item.label || '').trim() || String(item.url || '').trim());
+      return Boolean(String(item.text || '').trim());
+    }
+
+    function normalizeProject(project) {
+      const now = new Date().toISOString();
+      const source = project || {};
+      const status = ['Planning','Active','Blocked','On Hold','Complete'].includes(source.status) ? source.status : 'Planning';
+      const baseMax = status === 'Complete' ? 99 : 99;
+      return {
+        id: source.id || makeId(),
+        name: String(source.name || 'Untitled Project'),
+        category: String(source.category || ''),
+        status,
+        priority: ['High','Medium','Low'].includes(source.priority) ? source.priority : 'Medium',
+        progress: clamp(Math.trunc(Number(source.progress) || 0), 0, baseMax),
+        deadline: String(source.deadline || ''),
+        link: String(source.link || ''),
+        nextAction: String(source.nextAction || ''),
+        tags: Array.isArray(source.tags) ? source.tags.map(String).map(t => t.trim()).filter(Boolean) : [],
+        notes: String(source.notes || ''),
+        contentItems: Array.isArray(source.contentItems) ? source.contentItems.map(normalizeContentItem).filter(contentItemHasMeaningfulData) : [],
+        createdAt: source.createdAt || now,
+        updatedAt: source.updatedAt || now
+      };
+    }
+
+    function taskStats(project) {
+      const items = Array.isArray(project.contentItems) ? project.contentItems : [];
+      const tasks = items.filter(item => item.type === 'task');
+      return {
+        total: tasks.length,
+        completed: tasks.filter(item => item.completed).length
+      };
+    }
+
+    function computeProgress(project) {
+      if (project.status === 'Complete') return 100;
+      const base = clamp(Math.trunc(Number(project.progress) || 0), 0, 99);
+      const stats = taskStats(project);
+      if (!stats.total) return base;
+      const decimalHundredths = clamp(Math.round((stats.completed / stats.total) * 100), 0, 99);
+      return Number((base + (decimalHundredths / 100)).toFixed(2));
+    }
+
+    function projectMatchesActiveTags(project, activeTags) {
+      const required = Array.from(activeTags || []).map(tag => String(tag).toLowerCase());
+      if (!required.length) return true;
+      const projectTags = new Set((project.tags || []).map(tag => String(tag).toLowerCase()));
+      return required.every(tag => projectTags.has(tag));
+    }
+    /*__PURE_LOGIC_END__*/
+
+    const ORIGINAL_SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+    const SOFT_SOURCE_IMAGE_BYTES = 5 * 1024 * 1024;
+    const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
+    const DEFAULT_IMAGE_LONG_EDGE = 1600;
+
+    let projects = Array.isArray(EMBEDDED_PROJECTS) ? EMBEDDED_PROJECTS.map(normalizeProject) : [];
+    let editingId = null;
+    let currentView = 'cards';
+    let dirty = false;
+    const activeTagFilters = new Set();
+    const openDetailIds = new Set();
+    let pendingMediaOperation = null;
+    let reoptState = null;
+    let activeResize = null;
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      cardView: $('cardView'), tableView: $('tableView'), projectTableBody: $('projectTableBody'),
+      projectDialog: $('projectDialog'), dialogTitle: $('dialogTitle'), searchInput: $('searchInput'),
+      statusFilter: $('statusFilter'), priorityFilter: $('priorityFilter'), sortSelect: $('sortSelect'),
+      activeTagBar: $('activeTagBar'), projectName: $('projectName'), projectCategory: $('projectCategory'),
+      projectStatus: $('projectStatus'), projectPriority: $('projectPriority'), projectProgress: $('projectProgress'),
+      projectDeadline: $('projectDeadline'), projectLink: $('projectLink'), projectNextAction: $('projectNextAction'),
+      projectTags: $('projectTags'), projectNotes: $('projectNotes'), progressReadout: $('progressReadout'),
+      deleteProjectBtn: $('deleteProjectBtn'), saveStateText: $('saveStateText'), unsavedDot: $('unsavedDot'), toast: $('toast'),
+      mediaFileInput:$('mediaFileInput'), lightboxDialog:$('lightboxDialog'), lightboxImage:$('lightboxImage'), lightboxCaption:$('lightboxCaption'),
+      reoptDialog:$('reoptDialog'), reoptCap:$('reoptCap')
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+    }
+
+    function safeUrl(url) {
+      const raw = String(url || '').trim();
+      if (!raw) return '';
+      try {
+        const parsed = new URL(raw);
+        return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+      } catch { return ''; }
+    }
+
+    function linkifyText(value) {
+      const raw = String(value || '');
+      const urlPattern = /https?:\/\/[^\s<>"']+/gi;
+      let result = '';
+      let lastIndex = 0;
+      let match;
+      while ((match = urlPattern.exec(raw))) {
+        let candidate = match[0];
+        let trailing = '';
+        while (/[.,!?;:)]$/.test(candidate)) {
+          trailing = candidate.slice(-1) + trailing;
+          candidate = candidate.slice(0,-1);
+        }
+        result += escapeHtml(raw.slice(lastIndex, match.index));
+        const href = safeUrl(candidate);
+        result += href
+          ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(candidate)}</a>${escapeHtml(trailing)}`
+          : escapeHtml(match[0]);
+        lastIndex = match.index + match[0].length;
+      }
+      result += escapeHtml(raw.slice(lastIndex));
+      return result.replace(/\n/g,'<br>');
+    }
+
+    function formatBytes(bytes) {
+      const value = Math.max(0, Number(bytes) || 0);
+      if (value < 1024) return `${Math.round(value)} B`;
+      if (value < 1024 * 1024) return `${Number((value / 1024).toFixed(value < 10240 ? 1 : 0))} KB`;
+      if (value < 1024 * 1024 * 1024) return `${Number((value / (1024 * 1024)).toFixed(value < 10 * 1024 * 1024 ? 2 : 1))} MB`;
+      return `${Number((value / (1024 * 1024 * 1024)).toFixed(2))} GB`;
+    }
+
+    function projectImageBytes(project) {
+      return (Array.isArray(project && project.contentItems) ? project.contentItems : [])
+        .filter(item => item && item.type === 'image')
+        .reduce((sum,item) => sum + Math.max(0, Number(item.sizeBytes) || 0), 0);
+    }
+
+    function projectEmbeddedImageBytes(project) {
+      return (Array.isArray(project && project.contentItems) ? project.contentItems : [])
+        .filter(item => item && item.type === 'image')
+        .reduce((sum,item) => sum + String(item.src || '').length, 0);
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return '—';
+      const date = new Date(dateString + (dateString.length === 10 ? 'T12:00:00' : ''));
+      if (Number.isNaN(date.getTime())) return '—';
+      return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' }).format(date);
+    }
+
+    function formatUpdated(iso) {
+      if (!iso) return '—';
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return '—';
+      return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(date);
+    }
+
+    function formatProgress(project) {
+      const value = computeProgress(project);
+      const stats = taskStats(project);
+      if (value === 100) return '100%';
+      if (!stats.total) return `${Math.trunc(value)}%`;
+      return `${value.toFixed(2)}%`;
+    }
+
+    function getProject(id) { return projects.find(project => project.id === id); }
+
+    function contentItemSearchText(item) {
+      if (!item) return '';
+      if (item.type === 'link') return `${item.label || ''} ${item.url || ''}`;
+      if (item.type === 'image') return `${item.caption || ''} ${item.filename || ''} ${item.mimeType || ''}`;
+      return String(item.text || '');
+    }
+
+    function filteredProjects() {
+      const query = els.searchInput.value.trim().toLowerCase();
+      const status = els.statusFilter.value;
+      const priority = els.priorityFilter.value;
+
+      let result = projects.filter(project => {
+        const nestedText = (project.contentItems || []).map(contentItemSearchText).join(' ');
+        const haystack = [project.name, project.category, project.status, project.priority, project.nextAction, project.notes, project.tags.join(' '), nestedText].join(' ').toLowerCase();
+        return (!query || haystack.includes(query))
+          && (!status || project.status === status)
+          && (!priority || project.priority === priority)
+          && projectMatchesActiveTags(project, activeTagFilters);
+      });
+
+      const priorityWeight = { High:3, Medium:2, Low:1 };
+      result.sort((a,b) => {
+        switch (els.sortSelect.value) {
+          case 'name-asc': return a.name.localeCompare(b.name);
+          case 'priority-desc': return (priorityWeight[b.priority] - priorityWeight[a.priority]) || new Date(b.updatedAt) - new Date(a.updatedAt);
+          case 'progress-desc': return computeProgress(b) - computeProgress(a) || a.name.localeCompare(b.name);
+          case 'deadline-asc': {
+            const aTime = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
+            const bTime = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
+            return aTime - bTime;
+          }
+          default: return new Date(b.updatedAt) - new Date(a.updatedAt);
+        }
+      });
+      return result;
+    }
+
+    function render() {
+      renderMetrics();
+      renderActiveTagFilters();
+      const visible = filteredProjects();
+      renderCards(visible);
+      renderTable(visible);
+    }
+
+    function renderMetrics() {
+      $('metricTotal').textContent = projects.length;
+      $('metricActive').textContent = projects.filter(p => p.status === 'Active').length;
+      $('metricPlanning').textContent = projects.filter(p => p.status === 'Planning').length;
+      $('metricBlocked').textContent = projects.filter(p => p.status === 'Blocked').length;
+      $('metricComplete').textContent = projects.filter(p => p.status === 'Complete').length;
+    }
+
+    function displayTagForKey(key) {
+      for (const project of projects) {
+        const match = (project.tags || []).find(tag => tag.toLowerCase() === key);
+        if (match) return match;
+      }
+      return key;
+    }
+
+    function renderActiveTagFilters() {
+      if (!activeTagFilters.size) {
+        els.activeTagBar.classList.add('hidden');
+        els.activeTagBar.innerHTML = '';
+        return;
+      }
+      els.activeTagBar.classList.remove('hidden');
+      els.activeTagBar.innerHTML = `<span class="active-tag-label">Filtering tags (all required):</span>` +
+        Array.from(activeTagFilters).map(key => `<button class="tag tag-filter-chip active" type="button" data-action="tag-filter" data-tag="${escapeHtml(displayTagForKey(key))}">${escapeHtml(displayTagForKey(key))} ×</button>`).join('') +
+        `<button class="btn small ghost" type="button" data-action="clear-tags">Clear tags</button>`;
+    }
+
+    function statusClass(status) { return 'status-' + String(status).toLowerCase().replaceAll(' ', '-'); }
+    function priorityClass(priority) { return 'priority-' + String(priority).toLowerCase(); }
+
+    function renderTextLinkPreview(text) {
+      return /https?:\/\//i.test(String(text || '')) ? `<div class="linked-preview">${linkifyText(text)}</div>` : '';
+    }
+
+    function renderContentItem(project,item) {
+      const projectId = escapeHtml(project.id);
+      const itemId = escapeHtml(item.id);
+      if (item.type === 'link') {
+        const href = safeUrl(item.url);
+        return `<div class="content-link" data-item-id="${itemId}">
+          <input class="inline-control link-label" type="text" value="${escapeHtml(item.label)}" data-inline-item="label" data-project-id="${projectId}" data-item-id="${itemId}" placeholder="Link label" aria-label="Link label">
+          <input class="inline-control link-url" type="url" value="${escapeHtml(item.url)}" data-inline-item="url" data-project-id="${projectId}" data-item-id="${itemId}" placeholder="https://..." aria-label="Link URL">
+          ${href ? `<a class="btn small" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Open</a>` : `<span class="task-summary">Invalid/empty URL</span>`}
+          <button class="btn icon danger" type="button" data-action="delete-item" data-project-id="${projectId}" data-item-id="${itemId}" aria-label="Delete link">×</button>
+        </div>`;
+      }
+      if (item.type === 'image') {
+        const widthStyle = item.displayWidth ? `width:${Math.max(120,item.displayWidth)}px;` : 'width:100%;';
+        const metaDimensions = item.width && item.height ? `${item.width} × ${item.height}` : 'Unknown dimensions';
+        return `<div class="content-image-block" data-item-id="${itemId}">
+          <div class="image-frame" style="${widthStyle}">
+            <img class="embedded-image" src="${escapeHtml(item.src)}" alt="${escapeHtml(item.caption || item.filename || 'Project image')}" data-action="open-image" data-project-id="${projectId}" data-item-id="${itemId}" draggable="false">
+            <button class="resize-handle" type="button" data-resize-handle data-project-id="${projectId}" data-item-id="${itemId}" aria-label="Drag to resize image" title="Drag to resize">↘</button>
+          </div>
+          <input class="inline-control image-caption" type="text" value="${escapeHtml(item.caption)}" data-inline-item="caption" data-project-id="${projectId}" data-item-id="${itemId}" maxlength="300" placeholder="Optional image caption" aria-label="Image caption">
+          ${renderTextLinkPreview(item.caption)}
+          <div class="image-meta"><span>${escapeHtml((item.mimeType || 'image').replace('image/','').toUpperCase())}</span><span>${escapeHtml(metaDimensions)}</span><span>${formatBytes(item.sizeBytes)}</span><span>${escapeHtml(item.filename || 'image')}</span></div>
+          <div class="image-controls">
+            <button class="btn small" type="button" data-action="fit-image" data-project-id="${projectId}" data-item-id="${itemId}">Fit width</button>
+            <button class="btn small" type="button" data-action="original-image" data-project-id="${projectId}" data-item-id="${itemId}">Original size</button>
+            <button class="btn small" type="button" data-action="reopt-image" data-project-id="${projectId}" data-item-id="${itemId}">Re-optimize larger</button>
+            <button class="btn small" type="button" data-action="replace-image" data-project-id="${projectId}" data-item-id="${itemId}">Replace</button>
+            <button class="btn small danger" type="button" data-action="delete-item" data-project-id="${projectId}" data-item-id="${itemId}">Remove</button>
+          </div>
+        </div>`;
+      }
+      const isTask = item.type === 'task';
+      return `<div class="nested-item ${isTask && item.completed ? 'completed' : ''}" data-item-id="${itemId}">
+        ${isTask
+          ? `<input class="nested-check" type="checkbox" ${item.completed ? 'checked' : ''} data-action="toggle-task" data-project-id="${projectId}" data-item-id="${itemId}" aria-label="Toggle task">`
+          : `<span class="nested-marker">•</span>`}
+        <div>
+          <input class="inline-control nested-text" type="text" value="${escapeHtml(item.text)}" data-inline-item="text" data-project-id="${projectId}" data-item-id="${itemId}" aria-label="${isTask ? 'Task' : 'Bullet'} text">
+          ${renderTextLinkPreview(item.text)}
+        </div>
+        <button class="btn icon danger" type="button" data-action="delete-item" data-project-id="${projectId}" data-item-id="${itemId}" aria-label="Delete item">×</button>
+      </div>`;
+    }
+
+    function renderCards(list) {
+      if (!list.length) {
+        els.cardView.innerHTML = `<div class="empty"><h2>${projects.length ? 'No projects match these filters.' : 'No projects yet.'}</h2><div>${projects.length ? 'Try changing your search or filters.' : 'Click “Add Project” to create your first project.'}</div></div>`;
+        return;
+      }
+
+      els.cardView.innerHTML = list.map(project => {
+        const url = safeUrl(project.link);
+        const progress = computeProgress(project);
+        const stats = taskStats(project);
+        const taskSummary = stats.total ? `${stats.completed} / ${stats.total} tasks` : 'No tracked tasks';
+        const items = (project.contentItems || []);
+        const nestedHtml = items.length ? items.map(item => renderContentItem(project,item)).join('') : `<div class="nested-empty">No nested content yet. Add a task, bullet, link, or image below.</div>`;
+        const imageBytes = projectImageBytes(project);
+        const embeddedImageBytes = projectEmbeddedImageBytes(project);
+
+        return `
+          <article class="project-card" data-project-id="${escapeHtml(project.id)}">
+            <div class="card-head">
+              <div>
+                <input class="inline-control inline-name" data-inline-field="name" data-project-id="${escapeHtml(project.id)}" value="${escapeHtml(project.name)}" maxlength="140" aria-label="Project name">
+                <input class="inline-control inline-category" data-inline-field="category" data-project-id="${escapeHtml(project.id)}" value="${escapeHtml(project.category)}" maxlength="80" placeholder="Uncategorized" aria-label="Category">
+              </div>
+              <button class="btn small" data-action="edit-modal" data-project-id="${escapeHtml(project.id)}" type="button">Full Edit</button>
+            </div>
+
+            <div class="quick-controls">
+              <div class="compact-field"><label>Status</label><select class="compact-select" data-inline-field="status" data-project-id="${escapeHtml(project.id)}">${['Planning','Active','Blocked','On Hold','Complete'].map(v => `<option ${project.status === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+              <div class="compact-field"><label>Priority</label><select class="compact-select" data-inline-field="priority" data-project-id="${escapeHtml(project.id)}">${['High','Medium','Low'].map(v => `<option ${project.priority === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+            </div>
+
+            <div class="badges">
+              <span class="badge ${statusClass(project.status)}">${escapeHtml(project.status)}</span>
+              <span class="badge ${priorityClass(project.priority)}">${escapeHtml(project.priority)} priority</span>
+              <span class="badge">${escapeHtml(taskSummary)}</span>
+            </div>
+
+            <div class="progress-row">
+              <div class="progress-label">
+                <div class="base-progress-edit"><span>Base</span><input class="inline-control inline-number" data-inline-field="progress" data-project-id="${escapeHtml(project.id)}" type="number" min="0" max="99" step="1" value="${project.progress}" ${project.status === 'Complete' ? 'disabled' : ''}><span>%</span></div>
+                <strong class="progress-value">${formatProgress(project)}</strong>
+              </div>
+              <div class="progress-track"><div class="progress-fill" style="width:${clamp(progress,0,100)}%"></div></div>
+            </div>
+
+            <div class="next-action">
+              <strong>NEXT ACTION</strong>
+              <input class="inline-control inline-next" data-inline-field="nextAction" data-project-id="${escapeHtml(project.id)}" value="${escapeHtml(project.nextAction)}" maxlength="240" placeholder="Add the next action..." aria-label="Next action">
+            </div>
+
+            <div class="meta">
+              <div class="meta-row"><span>Deadline</span><input class="inline-control inline-date" data-inline-field="deadline" data-project-id="${escapeHtml(project.id)}" type="date" value="${escapeHtml(project.deadline)}"></div>
+              <div class="meta-row"><span>Updated</span><span>${formatUpdated(project.updatedAt)}</span></div>
+            </div>
+
+            <div class="tags">${project.tags.length ? project.tags.map(tag => `<button class="tag ${activeTagFilters.has(tag.toLowerCase()) ? 'active' : ''}" type="button" data-action="tag-filter" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('') : '<span class="task-summary">No tags</span>'}</div>
+            <input class="inline-control inline-tags-input" data-inline-field="tags" data-project-id="${escapeHtml(project.id)}" value="${escapeHtml(project.tags.join(', '))}" placeholder="Edit tags: hardware, research, urgent" aria-label="Edit tags">
+
+            <details class="project-details" data-project-details="${escapeHtml(project.id)}" ${openDetailIds.has(project.id) ? 'open' : ''}>
+              <summary><span>Notes & nested content</span><span class="task-summary">${escapeHtml(taskSummary)}</span></summary>
+              <div class="details-body">
+                <div>
+                  <div class="section-label">Notes</div>
+                  <textarea class="control inline-notes" data-inline-field="notes" data-project-id="${escapeHtml(project.id)}" placeholder="Key details, blockers, decisions, links, ideas...">${escapeHtml(project.notes)}</textarea>
+                  ${renderTextLinkPreview(project.notes)}
+                </div>
+                <div>
+                  <div class="section-label">Primary link</div>
+                  <input class="control" data-inline-field="link" data-project-id="${escapeHtml(project.id)}" type="url" value="${escapeHtml(project.link)}" placeholder="https://...">
+                </div>
+                <div>
+                  <div class="section-label">Mixed project content</div>
+                  <div class="storage-summary"><span>Image storage</span><strong>${formatBytes(imageBytes)} compressed · ~${formatBytes(embeddedImageBytes)} in HTML</strong></div>
+                  <div class="nested-list">${nestedHtml}</div>
+                </div>
+                <div class="add-nested">
+                  <input class="control" data-new-item-input data-project-id="${escapeHtml(project.id)}" type="text" maxlength="240" placeholder="Add a task or bullet...">
+                  <button class="btn small" type="button" data-action="add-item" data-type="task" data-project-id="${escapeHtml(project.id)}">+ Task</button>
+                  <button class="btn small" type="button" data-action="add-item" data-type="bullet" data-project-id="${escapeHtml(project.id)}">+ Bullet</button>
+                  <button class="btn small" type="button" data-action="add-link" data-project-id="${escapeHtml(project.id)}">+ Link</button>
+                  <button class="btn small" type="button" data-action="add-image" data-project-id="${escapeHtml(project.id)}">+ Image</button>
+                </div>
+              </div>
+            </details>
+
+            <div class="card-actions">
+              ${url ? `<a class="btn small" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open Link</a>` : ''}
+              <button class="btn small" data-action="duplicate" data-project-id="${escapeHtml(project.id)}" type="button">Duplicate</button>
+              <button class="btn small" data-action="toggle-complete" data-project-id="${escapeHtml(project.id)}" type="button">${project.status === 'Complete' ? 'Reopen' : 'Complete'}</button>
+            </div>
+          </article>`;
+      }).join('');
+    }
+
+    function renderTable(list) {
+      if (!list.length) {
+        els.projectTableBody.innerHTML = `<tr><td colspan="9">${projects.length ? 'No projects match these filters.' : 'No projects yet.'}</td></tr>`;
+        return;
+      }
+      els.projectTableBody.innerHTML = list.map(project => `
+        <tr>
+          <td><strong>${escapeHtml(project.name)}</strong><br><span style="color:var(--muted)">${escapeHtml(project.category || 'Uncategorized')}</span></td>
+          <td>${escapeHtml(project.status)}</td><td>${escapeHtml(project.priority)}</td><td>${formatProgress(project)}</td>
+          <td>${escapeHtml(project.nextAction || '—')}</td>
+          <td><div class="table-tags">${project.tags.map(tag => `<button class="tag ${activeTagFilters.has(tag.toLowerCase()) ? 'active' : ''}" type="button" data-action="tag-filter" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('') || '—'}</div></td>
+          <td>${formatDate(project.deadline)}</td><td>${formatUpdated(project.updatedAt)}</td>
+          <td><button class="btn small" data-action="edit-modal" data-project-id="${escapeHtml(project.id)}" type="button">Edit</button></td>
+        </tr>`).join('');
+    }
+
+    function touchProject(project) {
+      project.updatedAt = new Date().toISOString();
+      markDirty();
+    }
+
+    function updateProjectField(id, field, rawValue, rerender = false) {
+      const project = getProject(id);
+      if (!project) return;
+      if (field === 'name') project.name = String(rawValue).trimStart().slice(0,140) || project.name;
+      else if (field === 'category') project.category = String(rawValue).slice(0,80);
+      else if (field === 'nextAction') project.nextAction = String(rawValue).slice(0,240);
+      else if (field === 'notes') project.notes = String(rawValue);
+      else if (field === 'link') project.link = String(rawValue).slice(0,1000);
+      else if (field === 'deadline') project.deadline = String(rawValue || '');
+      else if (field === 'status' && ['Planning','Active','Blocked','On Hold','Complete'].includes(rawValue)) project.status = rawValue;
+      else if (field === 'priority' && ['High','Medium','Low'].includes(rawValue)) project.priority = rawValue;
+      else if (field === 'progress') project.progress = clamp(Math.trunc(Number(rawValue) || 0),0,99);
+      else if (field === 'tags') project.tags = String(rawValue).split(',').map(tag => tag.trim()).filter(Boolean);
+      else return;
+      touchProject(project);
+      if (rerender) render();
+    }
+
+    function toggleTagFilter(tag) {
+      const key = String(tag || '').trim().toLowerCase();
+      if (!key) return;
+      if (activeTagFilters.has(key)) activeTagFilters.delete(key); else activeTagFilters.add(key);
+      render();
+    }
+
+    function addContentItem(projectId, type, text) {
+      const project = getProject(projectId);
+      const clean = String(text || '').trim();
+      if (!project || !clean || !['task','bullet'].includes(type)) return false;
+      project.contentItems.push({ id: makeId(), type, text: clean, completed: false });
+      touchProject(project);
+      render();
+      return true;
+    }
+
+    function updateContentItem(projectId, itemId, changes, rerender = false) {
+      const project = getProject(projectId);
+      if (!project) return;
+      const item = project.contentItems.find(entry => entry.id === itemId);
+      if (!item) return;
+      if ((item.type === 'task' || item.type === 'bullet') && Object.hasOwn(changes,'text')) item.text = String(changes.text).slice(0,240);
+      if (item.type === 'task' && Object.hasOwn(changes,'completed')) item.completed = Boolean(changes.completed);
+      if (item.type === 'link' && Object.hasOwn(changes,'label')) item.label = String(changes.label).slice(0,240);
+      if (item.type === 'link' && Object.hasOwn(changes,'url')) item.url = String(changes.url).slice(0,2000);
+      if (item.type === 'image' && Object.hasOwn(changes,'caption')) item.caption = String(changes.caption).slice(0,300);
+      touchProject(project);
+      if (rerender) render();
+    }
+
+    function deleteContentItem(projectId, itemId) {
+      const project = getProject(projectId);
+      if (!project) return;
+      project.contentItems = project.contentItems.filter(item => item.id !== itemId);
+      touchProject(project);
+      render();
+    }
+
+    function addLinkItem(projectId) {
+      const project = getProject(projectId);
+      if (!project) return;
+      openDetailIds.add(projectId);
+      project.contentItems.push({ id:makeId(), type:'link', label:'', url:'' });
+      touchProject(project);
+      render();
+    }
+
+    function findContentItem(projectId,itemId) {
+      const project = getProject(projectId);
+      if (!project) return {project:null,item:null};
+      return {project,item:(project.contentItems || []).find(entry => entry.id === itemId) || null};
+    }
+
+    function fileToDataUrl(blob) {
+      return new Promise((resolve,reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not read image data.'));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function decodeImageBlob(blob) {
+      if (typeof createImageBitmap === 'function') {
+        try {
+          const bitmap = await createImageBitmap(blob);
+          return { drawable:bitmap, width:bitmap.width, height:bitmap.height, cleanup:() => bitmap.close && bitmap.close() };
+        } catch {}
+      }
+      return new Promise((resolve,reject) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const image = new Image();
+        image.onload = () => resolve({ drawable:image, width:image.naturalWidth, height:image.naturalHeight, cleanup:() => URL.revokeObjectURL(objectUrl) });
+        image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('This browser could not decode that image.')); };
+        image.src = objectUrl;
+      });
+    }
+
+    function canvasToTypedBlob(canvas,type,quality) {
+      return new Promise(resolve => {
+        canvas.toBlob(blob => resolve(blob && blob.type === type ? blob : null),type,quality);
+      });
+    }
+
+    async function optimizeImageFile(file,maxLongEdge = DEFAULT_IMAGE_LONG_EDGE) {
+      if (!file || !String(file.type || '').startsWith('image/')) throw new Error('Choose a supported image file.');
+      if (file.size > MAX_SOURCE_IMAGE_BYTES) throw new Error(`Image is ${formatBytes(file.size)}. The per-image source limit is 25 MB.`);
+      const decoded = await decodeImageBlob(file);
+      try {
+        if (!decoded.width || !decoded.height) throw new Error('Image has invalid dimensions.');
+        const preserveSource = maxLongEdge === 'source' || !Number.isFinite(Number(maxLongEdge));
+        const cap = preserveSource ? Math.max(decoded.width,decoded.height) : Math.max(1,Number(maxLongEdge) || DEFAULT_IMAGE_LONG_EDGE);
+        const scale = Math.min(1, cap / Math.max(decoded.width,decoded.height));
+        const width = Math.max(1,Math.round(decoded.width * scale));
+        const height = Math.max(1,Math.round(decoded.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const context = canvas.getContext('2d',{alpha:true});
+        if (!context) throw new Error('Canvas image processing is unavailable.');
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(decoded.drawable,0,0,width,height);
+
+        const candidates = [];
+        const safeOriginalTypes = new Set(['image/png','image/jpeg','image/webp','image/avif','image/gif']);
+        if (scale === 1 && safeOriginalTypes.has(file.type)) candidates.push({blob:file,type:file.type,label:'original'});
+
+        const webp = await canvasToTypedBlob(canvas,'image/webp',0.94);
+        if (webp) candidates.push({blob:webp,type:webp.type,label:'webp'});
+        const avif = await canvasToTypedBlob(canvas,'image/avif',0.90);
+        if (avif) candidates.push({blob:avif,type:avif.type,label:'avif'});
+        const png = await canvasToTypedBlob(canvas,'image/png');
+        if (png) candidates.push({blob:png,type:png.type,label:'png'});
+        if (file.type === 'image/jpeg') {
+          const jpeg = await canvasToTypedBlob(canvas,'image/jpeg',0.94);
+          if (jpeg) candidates.push({blob:jpeg,type:jpeg.type,label:'jpeg'});
+        }
+        if (!candidates.length) throw new Error('This browser could not encode the image into a supported embedded format.');
+        candidates.sort((a,b) => a.blob.size - b.blob.size);
+        const selected = candidates[0];
+        return {
+          src:await fileToDataUrl(selected.blob), mimeType:selected.type, width, height,
+          originalWidth:decoded.width, originalHeight:decoded.height, sizeBytes:selected.blob.size,
+          filename:String(file.name || 'image'), optimizedAt:new Date().toISOString(),
+          optimizationCap:preserveSource ? 'source' : Math.round(cap), warning:file.size > SOFT_SOURCE_IMAGE_BYTES
+        };
+      } finally { decoded.cleanup(); }
+    }
+
+    function beginImageSelection(mode,projectId,itemId = null,cap = DEFAULT_IMAGE_LONG_EDGE) {
+      pendingMediaOperation = {mode,projectId,itemId,cap};
+      els.mediaFileInput.value = '';
+      els.mediaFileInput.click();
+    }
+
+    async function processSelectedMediaFile(file) {
+      const operation = pendingMediaOperation;
+      pendingMediaOperation = null;
+      if (!operation || !file) return;
+      if (file.size > MAX_SOURCE_IMAGE_BYTES) { showToast(`Image rejected: ${formatBytes(file.size)} exceeds the 25 MB source limit.`); return; }
+      if (file.size > SOFT_SOURCE_IMAGE_BYTES) showToast(`Large source (${formatBytes(file.size)}). Optimizing before embedding…`);
+      else showToast('Optimizing image…');
+      try {
+        const optimized = await optimizeImageFile(file,operation.cap);
+        const project = getProject(operation.projectId);
+        if (!project) return;
+        openDetailIds.add(project.id);
+        if (operation.mode === 'add') {
+          project.contentItems.push(normalizeContentItem({id:makeId(),type:'image',...optimized,caption:'',displayWidth:null}));
+        } else {
+          const item = project.contentItems.find(entry => entry.id === operation.itemId && entry.type === 'image');
+          if (!item) return;
+          const caption = item.caption;
+          const displayWidth = item.displayWidth;
+          Object.assign(item,normalizeContentItem({id:item.id,type:'image',...optimized,caption,displayWidth}));
+        }
+        touchProject(project);
+        render();
+        showToast(`Image embedded as ${String(optimized.mimeType).replace('image/','').toUpperCase()} · ${formatBytes(optimized.sizeBytes)}.`);
+      } catch (error) { showToast(error && error.message ? error.message : 'Image processing failed.'); }
+    }
+
+    function setImageDisplayWidth(projectId,itemId,width) {
+      const {project,item} = findContentItem(projectId,itemId);
+      if (!project || !item || item.type !== 'image') return;
+      item.displayWidth = width === null ? null : Math.max(120,Math.round(Number(width) || item.width || 120));
+      touchProject(project);
+    }
+
+    function openReoptDialog(projectId,itemId) {
+      reoptState = {projectId,itemId};
+      els.reoptDialog.showModal();
+    }
+
+    function openLightbox(projectId,itemId) {
+      const {item} = findContentItem(projectId,itemId);
+      if (!item || item.type !== 'image') return;
+      els.lightboxImage.src = item.src;
+      els.lightboxImage.alt = item.caption || item.filename || 'Project image';
+      els.lightboxCaption.innerHTML = item.caption ? linkifyText(item.caption) : escapeHtml(item.filename || '');
+      els.lightboxDialog.showModal();
+    }
+
+    function resetForm() {
+      editingId = null;
+      els.dialogTitle.textContent = 'Add Project';
+      els.projectName.value = ''; els.projectCategory.value = ''; els.projectStatus.value = 'Planning'; els.projectPriority.value = 'Medium';
+      els.projectProgress.value = '0'; els.progressReadout.textContent = '0%'; els.projectDeadline.value = ''; els.projectLink.value = '';
+      els.projectNextAction.value = ''; els.projectTags.value = ''; els.projectNotes.value = ''; els.deleteProjectBtn.classList.add('hidden');
+    }
+
+    function openAdd() { resetForm(); els.projectDialog.showModal(); setTimeout(() => els.projectName.focus(),0); }
+
+    function openEdit(id) {
+      const project = getProject(id); if (!project) return;
+      editingId = id; els.dialogTitle.textContent = 'Edit Project'; els.projectName.value = project.name; els.projectCategory.value = project.category;
+      els.projectStatus.value = project.status; els.projectPriority.value = project.priority; els.projectProgress.value = String(project.progress);
+      els.progressReadout.textContent = project.progress + '%'; els.projectDeadline.value = project.deadline; els.projectLink.value = project.link;
+      els.projectNextAction.value = project.nextAction; els.projectTags.value = project.tags.join(', '); els.projectNotes.value = project.notes;
+      els.deleteProjectBtn.classList.remove('hidden'); els.projectDialog.showModal();
+    }
+
+    function saveProject() {
+      const name = els.projectName.value.trim();
+      if (!name) { showToast('Project name is required.'); els.projectName.focus(); return; }
+      const now = new Date().toISOString();
+      const data = {
+        name, category:els.projectCategory.value.trim(), status:els.projectStatus.value, priority:els.projectPriority.value,
+        progress:clamp(Math.trunc(Number(els.projectProgress.value) || 0),0,99), deadline:els.projectDeadline.value,
+        link:els.projectLink.value.trim(), nextAction:els.projectNextAction.value.trim(),
+        tags:els.projectTags.value.split(',').map(tag => tag.trim()).filter(Boolean), notes:els.projectNotes.value.trim(), updatedAt:now
+      };
+      if (editingId) {
+        const index = projects.findIndex(p => p.id === editingId);
+        if (index !== -1) projects[index] = normalizeProject({ ...projects[index], ...data, contentItems: projects[index].contentItems });
+      } else {
+        projects.push(normalizeProject({ id:makeId(), createdAt:now, contentItems:[], ...data }));
+      }
+      markDirty(); els.projectDialog.close(); render(); showToast(editingId ? 'Project updated.' : 'Project added.');
+    }
+
+    function deleteProject() {
+      if (!editingId) return;
+      const project = getProject(editingId); if (!project) return;
+      if (!confirm(`Delete "${project.name}"? This cannot be undone unless you reopen your last saved HTML copy.`)) return;
+      projects = projects.filter(p => p.id !== editingId); markDirty(); els.projectDialog.close(); render(); showToast('Project deleted.');
+    }
+
+    function duplicateProject(id) {
+      const project = getProject(id); if (!project) return;
+      const now = new Date().toISOString();
+      const clone = JSON.parse(JSON.stringify(project));
+      clone.id = makeId(); clone.name = project.name + ' (Copy)'; clone.createdAt = now; clone.updatedAt = now;
+      clone.contentItems = clone.contentItems.map(item => ({ ...item, id:makeId() }));
+      projects.push(normalizeProject(clone)); markDirty(); render(); showToast('Project duplicated.');
+    }
+
+    function toggleComplete(id) {
+      const project = getProject(id); if (!project) return;
+      const reopening = project.status === 'Complete';
+      project.status = reopening ? 'Active' : 'Complete';
+      project.progress = clamp(Math.trunc(Number(project.progress) || 0),0,99);
+      touchProject(project); render(); showToast(reopening ? 'Project reopened.' : 'Project completed.');
+    }
+
+    function markDirty() { dirty = true; els.unsavedDot.classList.add('show'); els.saveStateText.textContent = 'You have unsaved changes.'; }
+    function markSaved() { dirty = false; els.unsavedDot.classList.remove('show'); els.saveStateText.textContent = 'A new self-contained HTML copy was generated.'; }
+
+    function cleanProjectsForExport() {
+      return projects.map(project => ({
+        ...project,
+        contentItems:(project.contentItems || []).map(normalizeContentItem).filter(contentItemHasMeaningfulData)
+      }));
+    }
+
+    function serializeForScript(value) {
+      return JSON.stringify(value,null,2).replaceAll('<','\\u003C').replaceAll('\u2028','\\u2028').replaceAll('\u2029','\\u2029');
+    }
+
+    function buildUpdatedHtml() {
+      const markerRegex = /\/\*__PROJECT_DATA_START__\*\/[\s\S]*?\/\*__PROJECT_DATA_END__\*\//;
+      const embedded = `/*__PROJECT_DATA_START__*/${serializeForScript(cleanProjectsForExport())}/*__PROJECT_DATA_END__*/`;
+      return ORIGINAL_SOURCE.replace(markerRegex,embedded);
+    }
+
+    function downloadBlob(filename, contents, type) {
+      const blob = new Blob([contents],{type}); const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
+    }
+
+    function saveUpdatedHtml() { downloadBlob('Project-Command-Center-v3.html',buildUpdatedHtml(),'text/html;charset=utf-8'); markSaved(); showToast('Updated self-contained HTML downloaded.'); }
+    function exportJson() { downloadBlob('Project-Command-Center-Backup.json',JSON.stringify({exportedAt:new Date().toISOString(),projectCount:projects.length,projects:cleanProjectsForExport()},null,2),'application/json;charset=utf-8'); showToast('JSON backup downloaded.'); }
+
+    function setView(view) {
+      currentView = view; const cards = view === 'cards'; els.cardView.classList.toggle('hidden',!cards); els.tableView.classList.toggle('hidden',cards);
+      $('cardViewBtn').classList.toggle('primary',cards); $('tableViewBtn').classList.toggle('primary',!cards);
+    }
+
+    let toastTimer;
+    function showToast(message) { clearTimeout(toastTimer); els.toast.textContent = message; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'),2600); }
+
+    $('addProjectBtn').addEventListener('click',openAdd);
+    $('saveProjectBtn').addEventListener('click',saveProject);
+    $('deleteProjectBtn').addEventListener('click',deleteProject);
+    $('cancelProjectBtn').addEventListener('click',() => els.projectDialog.close());
+    $('closeDialogBtn').addEventListener('click',() => els.projectDialog.close());
+    els.projectProgress.addEventListener('input',() => { els.progressReadout.textContent = els.projectProgress.value + '%'; });
+
+    [els.searchInput, els.statusFilter, els.priorityFilter, els.sortSelect].forEach(control => control.addEventListener(control.tagName === 'INPUT' ? 'input' : 'change',render));
+    $('cardViewBtn').addEventListener('click',() => setView('cards'));
+    $('tableViewBtn').addEventListener('click',() => setView('table'));
+    $('saveHtmlBtn').addEventListener('click',saveUpdatedHtml);
+    $('backupBtn').addEventListener('click',exportJson);
+    $('themeBtn').addEventListener('click',() => document.body.classList.toggle('light'));
+
+    document.addEventListener('click',event => {
+      const actionEl = event.target.closest('[data-action]'); if (!actionEl) return;
+      const action = actionEl.dataset.action;
+      if (action === 'tag-filter') toggleTagFilter(actionEl.dataset.tag);
+      else if (action === 'clear-tags') { activeTagFilters.clear(); render(); }
+      else if (action === 'edit-modal') openEdit(actionEl.dataset.projectId);
+      else if (action === 'duplicate') duplicateProject(actionEl.dataset.projectId);
+      else if (action === 'toggle-complete') toggleComplete(actionEl.dataset.projectId);
+      else if (action === 'add-link') addLinkItem(actionEl.dataset.projectId);
+      else if (action === 'add-image') beginImageSelection('add',actionEl.dataset.projectId);
+      else if (action === 'replace-image') beginImageSelection('replace',actionEl.dataset.projectId,actionEl.dataset.itemId);
+      else if (action === 'fit-image') { openDetailIds.add(actionEl.dataset.projectId); setImageDisplayWidth(actionEl.dataset.projectId,actionEl.dataset.itemId,null); render(); }
+      else if (action === 'original-image') { const found=findContentItem(actionEl.dataset.projectId,actionEl.dataset.itemId); if(found.item){ openDetailIds.add(actionEl.dataset.projectId); setImageDisplayWidth(actionEl.dataset.projectId,actionEl.dataset.itemId,found.item.width); render(); } }
+      else if (action === 'reopt-image') openReoptDialog(actionEl.dataset.projectId,actionEl.dataset.itemId);
+      else if (action === 'open-image') openLightbox(actionEl.dataset.projectId,actionEl.dataset.itemId);
+      else if (action === 'delete-item') deleteContentItem(actionEl.dataset.projectId,actionEl.dataset.itemId);
+      else if (action === 'toggle-task') updateContentItem(actionEl.dataset.projectId,actionEl.dataset.itemId,{completed:actionEl.checked},true);
+      else if (action === 'add-item') {
+        const card = actionEl.closest('.project-card'); const input = card && card.querySelector('[data-new-item-input]');
+        if (input && addContentItem(actionEl.dataset.projectId,actionEl.dataset.type,input.value)) input.value = '';
+        else if (input) { showToast('Type an item first.'); input.focus(); }
+      }
+    });
+
+    document.addEventListener('input',event => {
+      const field = event.target.dataset.inlineField;
+      if (field && ['name','category','nextAction','notes','link'].includes(field)) updateProjectField(event.target.dataset.projectId,field,event.target.value,false);
+      const itemField = event.target.dataset.inlineItem;
+      if (itemField && ['text','label','url','caption'].includes(itemField)) updateContentItem(event.target.dataset.projectId,event.target.dataset.itemId,{[itemField]:event.target.value},false);
+    });
+
+    document.addEventListener('change',event => {
+      const field = event.target.dataset.inlineField;
+      if (field && ['status','priority','progress','deadline','tags'].includes(field)) updateProjectField(event.target.dataset.projectId,field,event.target.value,true);
+      else if (field && ['notes','link'].includes(field)) render();
+      const itemField = event.target.dataset.inlineItem;
+      if (itemField && ['text','label','url','caption'].includes(itemField)) render();
+    });
+
+    document.addEventListener('keydown',event => {
+      if (event.target.matches('[data-new-item-input]') && event.key === 'Enter') {
+        event.preventDefault();
+        const projectId = event.target.dataset.projectId;
+        if (addContentItem(projectId,'task',event.target.value)) event.target.value = '';
+        else showToast('Type an item first.');
+      }
+      if (event.target === els.projectName && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) saveProject();
+    });
+
+    els.mediaFileInput.addEventListener('change',event => {
+      const file = event.target.files && event.target.files[0];
+      processSelectedMediaFile(file);
+    });
+
+    $('closeLightboxBtn').addEventListener('click',() => els.lightboxDialog.close());
+    els.lightboxDialog.addEventListener('click',event => { if (event.target === els.lightboxDialog) els.lightboxDialog.close(); });
+    $('closeReoptBtn').addEventListener('click',() => els.reoptDialog.close());
+    $('cancelReoptBtn').addEventListener('click',() => els.reoptDialog.close());
+    $('chooseReoptSourceBtn').addEventListener('click',() => {
+      if (!reoptState) return;
+      const cap = els.reoptCap.value === 'source' ? 'source' : Number(els.reoptCap.value);
+      const {projectId,itemId} = reoptState;
+      reoptState = null;
+      els.reoptDialog.close();
+      beginImageSelection('reopt',projectId,itemId,cap);
+    });
+
+    document.addEventListener('toggle',event => {
+      const details = event.target.closest && event.target.closest('[data-project-details]');
+      if (!details) return;
+      if (details.open) openDetailIds.add(details.dataset.projectDetails); else openDetailIds.delete(details.dataset.projectDetails);
+    },true);
+
+    document.addEventListener('pointerdown',event => {
+      const handle = event.target.closest('[data-resize-handle]');
+      if (!handle) return;
+      event.preventDefault(); event.stopPropagation();
+      const frame = handle.closest('.image-frame');
+      if (!frame) return;
+      activeResize = {
+        projectId:handle.dataset.projectId, itemId:handle.dataset.itemId, frame,
+        startX:event.clientX, startWidth:frame.getBoundingClientRect().width,
+        maxWidth:Math.max(120,(frame.parentElement && frame.parentElement.clientWidth) || frame.getBoundingClientRect().width)
+      };
+      if (handle.setPointerCapture) handle.setPointerCapture(event.pointerId);
+    });
+    document.addEventListener('pointermove',event => {
+      if (!activeResize) return;
+      const width = clamp(activeResize.startWidth + (event.clientX - activeResize.startX),120,activeResize.maxWidth);
+      activeResize.frame.style.width = `${Math.round(width)}px`;
+    });
+    document.addEventListener('pointerup',() => {
+      if (!activeResize) return;
+      const finalWidth = activeResize.frame.getBoundingClientRect().width;
+      setImageDisplayWidth(activeResize.projectId,activeResize.itemId,finalWidth);
+      activeResize = null;
+    });
+
+    window.addEventListener('beforeunload',event => { if (!dirty) return; event.preventDefault(); event.returnValue = ''; });
+
+    render(); setView(currentView);
+  </script>
+</body>
+</html>
