@@ -2,9 +2,9 @@
 
 Read these documents before implementation:
 
-@docs/v3-design.md
-@docs/v4-update-pipeline-design.md
-@docs/v4-update-pipeline-implementation-plan.md
+@docs/Project-Command-Center-v3-design.md
+@docs/Project-Command-Center-v4-update-pipeline-design.md
+@docs/Project-Command-Center-v4-update-pipeline-implementation-plan.md
 
 The immutable v3 reference application is:
 
@@ -142,3 +142,50 @@ Before claiming completion, run all applicable tests, build validation,
 migration tests, and legacy-v3 round-trip tests.
 
 Do not publish a GitHub Release unless explicitly asked.
+
+## Engineering restraint
+
+Do not introduce a framework, database, server, runtime package manager,
+state-management library, or build dependency unless it provides a clear
+benefit required by the specification.
+
+Prefer:
+- browser-native APIs
+- vanilla JavaScript
+- Node built-ins where practical
+- deterministic build tooling
+- small focused modules
+
+Do not convert the project to React/Vue/Svelte merely to modularize it.
+
+
+The implementation plan is approved, but it is not sacred at the
+line-by-line engineering level.
+
+You may improve:
+- module boundaries
+- test organization
+- dependency choices
+- build mechanics
+- internal APIs
+
+You may not change without approval:
+- user-facing behavior
+- data migration guarantees
+- update-security guarantees
+- persistence architecture
+- progress semantics
+- image semantics
+- self-contained release requirement
+
+You may use subagents for independent work such as:
+
+- migration test review
+- security/integrity review
+- build-system review
+- legacy v3 behavior inventory
+
+Do not have multiple agents concurrently modify the same files.
+
+The primary agent remains responsible for integrating and independently
+verifying all delegated work.
