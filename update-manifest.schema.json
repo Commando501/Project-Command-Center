@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/project-command-center/update-manifest.schema.json",
+  "title": "Project Command Center update manifest",
+  "description": "Published alongside each release HTML asset. This file documents the format for anyone consuming a release; the application and CI both validate manifests with validateUpdateManifest() in src/updater/manifest.js, so that one implementation is the authority and cannot drift from a parallel schema.",
+  "type": "object",
+  "required": [
+    "formatVersion",
+    "appVersion",
+    "schemaVersion",
+    "minSchemaVersion",
+    "channel",
+    "assetName",
+    "sha256",
+    "publishedAt"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "formatVersion": {
+      "description": "Version of this manifest format. Incremented only when the manifest shape changes in a way older applications cannot read.",
+      "type": "integer",
+      "const": 1
+    },
+    "appVersion": {
+      "description": "Application version of the release asset. Independent of schemaVersion.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "schemaVersion": {
+      "description": "Data Capsule schema this release writes.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "minSchemaVersion": {
+      "description": "Oldest Data Capsule schema this release can migrate from. A file older than this needs an intermediate release.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "channel": {
+      "description": "Release channel. Only stable is published today.",
+      "type": "string",
+      "enum": ["stable", "beta", "development"]
+    },
+    "assetName": {
+      "description": "Bare file name of the release HTML asset in the same GitHub Release. Must not contain a path separator.",
+      "type": "string",
+      "pattern": "^[^/\\\\]+\\.html$"
+    },
+    "sha256": {
+      "description": "SHA-256 of the exact release asset bytes, as 64 lowercase hex characters. May carry a 'sha256:' prefix, matching the digest form GitHub reports for release assets.",
+      "type": "string",
+      "pattern": "^(sha256:)?[a-fA-F0-9]{64}$"
+    },
+    "publishedAt": {
+      "description": "ISO 8601 timestamp for when the release was built.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "releaseNotes": {
+      "description": "Optional human-readable notes shown in the update review panel.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "signature": {
+      "description": "Reserved for future signed releases. Null means unsigned, which is the expected state for v4. The field exists now so adding signatures later does not require a new formatVersion.",
+      "type": ["string", "null"]
+    }
+  }
+}

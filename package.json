@@ -1,0 +1,23 @@
+{
+  "name": "project-command-center",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained single-file project tracker with a verified update pipeline.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "node scripts/build-standalone.mjs",
+    "validate:build": "node scripts/validate-build.mjs",
+    "manifest": "node scripts/generate-manifest.mjs",
+    "release:check": "npm test && npm run build && npm run validate:build && npm run manifest"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "vitest": "^3.0.0"
+  }
+}

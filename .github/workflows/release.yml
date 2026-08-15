@@ -1,0 +1,69 @@
+name: Release
+
+# Publishes only when every quality gate passes. Action major versions verified
+# against the marketplace on 2026-08-15: actions/checkout v7, setup-node v7.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Verify the tag matches the package version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+
+      - run: npm run build
+        env:
+          RELEASE_BUILD: "1"
+          PCC_REPO_SLUG: ${{ github.repository }}
+
+      - run: npm run validate:build
+
+      - run: npm run manifest
+        env:
+          PCC_REPO_SLUG: ${{ github.repository }}
+
+      # NOTHING may modify the HTML after this point. The manifest digest
+      # describes the exact bytes on disk, and a formatter, banner injection, or
+      # newline normalisation running later would publish a hash that no client
+      # could ever match, breaking updates for everyone.
+      - name: Verify the manifest digest matches the built file
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          ACTUAL=$(node -e "
+            const {createHash}=require('node:crypto');
+            const {readFileSync}=require('node:fs');
+            process.stdout.write(createHash('sha256').update(readFileSync('dist/Project-Command-Center-v${VERSION}.html')).digest('hex'));
+          ")
+          EXPECTED=$(node -p "require('./dist/update-manifest.json').sha256")
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Create the release and upload the artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create "v${VERSION}" \
+            "dist/Project-Command-Center-v${VERSION}.html" \
+            "dist/update-manifest.json" \
+            --title "Project Command Center v${VERSION}" \
+            --generate-notes

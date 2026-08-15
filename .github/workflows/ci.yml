@@ -1,0 +1,56 @@
+name: CI
+
+# Action major versions verified against the marketplace on 2026-08-15:
+# actions/checkout v7, actions/setup-node v7. Node 20 reached end of life in
+# April 2026, so CI runs on 22 while package.json still allows >=20 locally.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run build
+        env:
+          PCC_REPO_SLUG: ${{ github.repository }}
+
+      - run: npm run validate:build
+
+      - run: npm run manifest
+        env:
+          PCC_REPO_SLUG: ${{ github.repository }}
+
+      # The published digest must describe the released bytes exactly, so it is
+      # recomputed here independently of the generator that produced it.
+      - name: Verify the manifest digest matches the built file
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          ACTUAL=$(node -e "
+            const {createHash}=require('node:crypto');
+            const {readFileSync}=require('node:fs');
+            process.stdout.write(createHash('sha256').update(readFileSync('dist/Project-Command-Center-v${VERSION}.html')).digest('hex'));
+          ")
+          EXPECTED=$(node -p "require('./dist/update-manifest.json').sha256")
+          echo "actual   $ACTUAL"
+          echo "expected $EXPECTED"
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Confirm the legacy reference application was not modified
+        run: git diff --exit-code -- legacy/Project-Command-Center-v3.html

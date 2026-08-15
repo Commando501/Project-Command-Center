@@ -1,0 +1,10 @@
+{
+  "formatVersion": 2,
+  "schemaVersion": 2,
+  "minSchemaVersion": 4,
+  "channel": "nightly",
+  "assetName": "Project-Command-Center-v4.1.0.txt",
+  "sha256": "not-a-digest",
+  "publishedAt": "sometime last week",
+  "releaseNotes": "should be an array"
+}

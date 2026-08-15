@@ -1,0 +1,7 @@
+# The released HTML is hashed with SHA-256 and that digest is published in the
+# update manifest. A Windows checkout that converted source to CRLF would build
+# a byte-different artifact from a Linux checkout, so all source is pinned to LF.
+* text=auto eol=lf
+
+# The immutable v3 reference must never be renormalized by git.
+legacy/Project-Command-Center-v3.html -text
