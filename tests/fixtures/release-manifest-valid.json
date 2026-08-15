@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "appVersion": "4.1.0",
+  "schemaVersion": 4,
+  "minSchemaVersion": 3,
+  "channel": "stable",
+  "assetName": "Project-Command-Center-v4.1.0.html",
+  "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+  "publishedAt": "2026-08-14T22:00:00Z",
+  "releaseNotes": [
+    "Added the verified update pipeline",
+    "Improved image storage reporting"
+  ],
+  "signature": null
+}
