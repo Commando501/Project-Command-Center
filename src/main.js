@@ -35,6 +35,7 @@ import {
   injectDataCapsuleIntoShell
 } from './persistence/standalone-export.js';
 import { readAppMetadata } from './updater/app-metadata.js';
+import { initUpdateUi } from './updater/update-ui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -498,7 +499,20 @@ export function boot() {
   draw();
   setView(state.currentView);
 
-  return { state, els, metadata, draw, showToast };
+  // The tracker is fully rendered and interactive before the updater is even
+  // constructed, and the check that follows is never awaited. A slow, blocked,
+  // or failing network cannot delay access to project data.
+  const updates = initUpdateUi({
+    state,
+    appMetadata: metadata,
+    document,
+    showToast,
+    downloadBlob,
+    refreshSaveState
+  });
+  updates.startAutomaticCheck();
+
+  return { state, els, metadata, draw, showToast, updates };
 }
 
 if (typeof document !== 'undefined' && !globalThis.__PCC_TEST__) {

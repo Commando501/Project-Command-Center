@@ -19,6 +19,7 @@
       <div class="top-actions">
         <button class="btn" id="themeBtn" type="button">Toggle Theme</button>
         <button class="btn" id="backupBtn" type="button">Export JSON Backup</button>
+        <button class="btn" id="updatesBtn" type="button">Updates</button>
         <button class="btn primary" id="saveHtmlBtn" type="button">Save Updated HTML</button>
         <button class="btn primary" id="addProjectBtn" type="button">+ Add Project</button>
       </div>
@@ -27,6 +28,14 @@
     <div class="save-note">
       <span class="unsaved-dot" id="unsavedDot"></span>
       <div><strong id="saveStateText">All embedded data is current.</strong> Inline changes stay in memory while this page is open. Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.</div>
+    </div>
+
+    <div class="update-banner hidden" id="updateBanner" role="status" aria-live="polite">
+      <span id="updateBannerText">An update is available.</span>
+      <div class="update-banner-actions">
+        <button class="btn small primary" id="viewUpdateBtn" type="button">View Update</button>
+        <button class="btn small ghost" id="dismissUpdateBtn" type="button">Dismiss</button>
+      </div>
     </div>
 
     <section class="dashboard" aria-label="Project summary">
@@ -133,6 +142,89 @@
     <button class="btn lightbox-close" id="closeLightboxBtn" type="button">Close</button>
     <div class="lightbox-wrap"><img id="lightboxImage" alt="Expanded project image"></div>
     <div class="lightbox-caption" id="lightboxCaption"></div>
+  </dialog>
+
+  <input id="updateFileInput" type="file" accept=".html,text/html" aria-hidden="true" />
+
+  <dialog id="updatesDialog">
+    <div class="modal-head">
+      <h2 id="updatesDialogTitle">Updates</h2>
+      <button class="btn small" id="closeUpdatesBtn" type="button" aria-label="Close">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <section id="updateSettingsPanel">
+        <div class="update-facts">
+          <div><span class="section-label">Application version</span><strong id="updateAppVersion">—</strong></div>
+          <div><span class="section-label">Data schema</span><strong id="updateSchemaVersion">—</strong></div>
+          <div><span class="section-label">Release channel</span><strong id="updateChannelValue">—</strong></div>
+          <div><span class="section-label">Last checked</span><strong id="updateLastChecked">Never</strong></div>
+        </div>
+
+        <div class="update-prefs">
+          <label class="update-toggle">
+            <input type="checkbox" id="prefAutoCheck" />
+            <span>Check for updates automatically when this file opens</span>
+          </label>
+          <label class="update-toggle">
+            <input type="checkbox" id="prefAutoBackup" />
+            <span>Generate a data backup before installing an update</span>
+          </label>
+          <label class="update-toggle">
+            <span>Update channel</span>
+            <select class="control" id="prefChannel">
+              <option value="stable">Stable</option>
+              <option value="beta">Beta</option>
+              <option value="development">Development</option>
+            </select>
+          </label>
+          <p class="update-hint">Preference changes are stored in this file's data, so use <strong>Save Updated HTML</strong> to keep them.</p>
+        </div>
+
+        <p class="update-status" id="updateStatusText">Updates are never installed automatically.</p>
+      </section>
+
+      <section id="updateReviewPanel" class="hidden">
+        <div class="update-facts">
+          <div><span class="section-label">Installed</span><strong id="reviewInstalledVersion">—</strong></div>
+          <div><span class="section-label">Available</span><strong id="reviewCandidateVersion">—</strong></div>
+          <div><span class="section-label">Schema</span><strong id="reviewSchema">—</strong></div>
+          <div><span class="section-label">Compatibility</span><strong id="reviewCompatibility">—</strong></div>
+          <div><span class="section-label">Download size</span><strong id="reviewSize">—</strong></div>
+          <div><span class="section-label">Released</span><strong id="reviewPublished">—</strong></div>
+        </div>
+        <div class="update-verification" id="reviewVerification">Not yet verified.</div>
+        <div class="section-label">Release notes</div>
+        <ul class="update-notes" id="reviewNotes"><li>No release notes were provided.</li></ul>
+      </section>
+
+      <section id="updateResultPanel" class="hidden">
+        <h3 class="update-result-title">Update ready</h3>
+        <p class="update-hint" id="resultSummary">Your previous file was not modified.</p>
+        <div class="update-facts">
+          <div><span class="section-label">Old version</span><strong id="resultOldVersion">—</strong></div>
+          <div><span class="section-label">New version</span><strong id="resultNewVersion">—</strong></div>
+          <div><span class="section-label">Schema</span><strong id="resultSchema">—</strong></div>
+          <div><span class="section-label">Projects migrated</span><strong id="resultProjects">—</strong></div>
+          <div><span class="section-label">Images preserved</span><strong id="resultImages">—</strong></div>
+          <div><span class="section-label">Verification</span><strong id="resultVerification">—</strong></div>
+        </div>
+        <ul class="update-notes hidden" id="resultWarnings"></ul>
+      </section>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="updateBackBtn" type="button">Back</button>
+      <div class="modal-actions-right">
+        <button class="btn" id="exportBackupBtn" type="button">Export Data Backup</button>
+        <button class="btn" id="installFromFileBtn" type="button">Install Update From File</button>
+        <button class="btn" id="checkUpdatesBtn" type="button">Check for Updates</button>
+        <button class="btn danger hidden" id="confirmUnverifiedBtn" type="button">Use Unverified Update</button>
+        <button class="btn primary hidden" id="installUpdateBtn" type="button">Install Update</button>
+        <button class="btn hidden" id="downloadBackupBtn" type="button">Download Data Backup</button>
+        <button class="btn primary hidden" id="downloadUpdatedBtn" type="button">Download Updated HTML</button>
+      </div>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

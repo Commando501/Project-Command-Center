@@ -544,3 +544,74 @@ textarea.control { min-height: 90px; resize: vertical; }
   .image-controls .btn { flex: 1 1 auto; }
   .resize-handle { width: 34px; height: 34px; }
 }
+
+/* ---------------------------------------------------------------- updates */
+
+.update-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  border-radius: 12px;
+  padding: 11px 14px;
+  margin-bottom: 18px;
+  font-size: .93rem;
+}
+.update-banner-actions { display: flex; gap: 8px; }
+
+.update-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.update-facts > div { display: grid; gap: 3px; }
+.update-facts strong { font-size: .98rem; overflow-wrap: anywhere; }
+
+.update-prefs { display: grid; gap: 11px; margin-bottom: 16px; }
+.update-toggle {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: .9rem;
+  color: var(--text);
+}
+.update-toggle input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
+.update-toggle select { width: auto; min-width: 160px; margin-left: auto; }
+
+.update-hint { color: var(--muted); font-size: .84rem; margin: 0; line-height: 1.5; }
+.update-status {
+  color: var(--muted);
+  font-size: .86rem;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.update-verification {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: .88rem;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.update-verification.verified { border-color: color-mix(in srgb, var(--success) 55%, var(--border)); color: var(--success); }
+.update-verification.unverified { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); color: var(--warning); }
+.update-verification.failed { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); color: var(--danger); }
+
+.update-notes { margin: 6px 0 0; padding-left: 20px; color: var(--muted); font-size: .88rem; }
+.update-notes li { margin-bottom: 4px; overflow-wrap: anywhere; }
+.update-result-title { margin: 0 0 6px; font-size: 1.05rem; }
+
+#updateFileInput { display: none; }
+
+@media (max-width: 700px) {
+  .update-banner { align-items: flex-start; flex-direction: column; }
+  .update-toggle select { margin-left: 0; width: 100%; }
+}
