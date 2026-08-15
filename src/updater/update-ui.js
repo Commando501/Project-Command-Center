@@ -2,7 +2,8 @@ import { formatBytes, formatUpdated } from '../app/format.js';
 import { buildUpdateBackup, checkForOnlineUpdate, inspectManualUpdate, prepareManualUpdate, prepareOfficialUpdate } from './update-engine.js';
 import { hasReleaseRepository } from './app-metadata.js';
 import { isSha256Available } from './sha256.js';
-import { setPreference, toDataCapsule } from '../app/state.js';
+import { replaceProjects, setPreference, toDataCapsule } from '../app/state.js';
+import { prepareBackupRestore } from './restore.js';
 
 /**
  * Update settings, availability banner, review, and result flow.
@@ -26,6 +27,8 @@ export function initUpdateUi({
   showToast,
   downloadBlob,
   refreshSaveState,
+  redraw,
+  confirmRestore = (message) => globalThis.confirm(message),
   fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : undefined
 }) {
   const $ = (id) => doc.getElementById(id);
@@ -40,6 +43,7 @@ export function initUpdateUi({
     'reviewSize', 'reviewPublished', 'reviewVerification', 'reviewNotes',
     'resultSummary', 'resultNextSteps', 'resultOldVersion', 'resultNewVersion', 'resultSchema',
     'resultProjects', 'resultImages', 'resultVerification', 'resultWarnings',
+    'reviewNextSteps', 'backupFileInput', 'importBackupBtn',
     'updateBackBtn', 'exportBackupBtn', 'installFromFileBtn', 'checkUpdatesBtn',
     'confirmUnverifiedBtn', 'installUpdateBtn', 'downloadBackupBtn', 'downloadUpdatedBtn',
     'downloadReleaseBtn'
@@ -52,6 +56,25 @@ export function initUpdateUi({
 
   const show = (element, visible) => element.classList.toggle('hidden', !visible);
 
+  /**
+   * Whether this page can fetch the release itself.
+   *
+   * A page opened from disk has an opaque origin and cannot read release
+   * assets, so a direct install can only ever fail. Detecting that up front is
+   * the difference between guiding the user and offering a dead button.
+   */
+  const canInstallDirectly = () => globalThis.location?.protocol !== 'file:';
+
+  function setNextSteps(element, steps) {
+    element.innerHTML = '';
+    for (const step of steps) {
+      const item = doc.createElement('li');
+      item.textContent = step;
+      element.appendChild(item);
+    }
+    show(element, steps.length > 0);
+  }
+
   function showPanel(name) {
     for (const panel of PANELS) show(els[panel], panel === name);
 
@@ -62,11 +85,17 @@ export function initUpdateUi({
     show(els.checkUpdatesBtn, settings);
 
     const review = name === 'updateReviewPanel';
-    show(els.installUpdateBtn, review);
+    // A locally selected file is always installable; an online candidate only
+    // when this page can actually fetch it.
+    const installable = Boolean(inspection) || (Boolean(availability) && canInstallDirectly());
+    show(els.installUpdateBtn, review && installable);
     show(els.confirmUnverifiedBtn, review && inspection?.trust === 'unverified-offline');
     // Downloading through the browser is not subject to CORS, so this stays
     // available for an online candidate even when a direct fetch is blocked.
     show(els.downloadReleaseBtn, review && Boolean(availability?.candidate?.downloadUrl));
+    // With no direct install, downloading is the action to take, so it should
+    // look like it.
+    els.downloadReleaseBtn.classList.toggle('primary', review && !installable);
 
     const result = name === 'updateResultPanel';
     show(els.downloadBackupBtn, result && Boolean(prepared?.backup));
@@ -174,18 +203,36 @@ export function initUpdateUi({
     }
 
     inspection = null;
-    setVerification(
-      'The release will be downloaded and its SHA-256 checked before anything is migrated.',
-      ''
-    );
     els.installUpdateBtn.textContent = 'Install Update';
     els.installUpdateBtn.disabled = !isSha256Available();
+
     if (!isSha256Available()) {
       setVerification(
         'This browser cannot verify updates because Web Crypto is unavailable. '
         + 'Download the release from GitHub and verify it yourself.',
         'failed'
       );
+      setNextSteps(els.reviewNextSteps, []);
+    } else if (canInstallDirectly()) {
+      setVerification(
+        'The release will be downloaded and its SHA-256 checked before anything is migrated.',
+        ''
+      );
+      setNextSteps(els.reviewNextSteps, []);
+    } else {
+      // Spell out the whole sequence before the first click, so it reads as
+      // three steps rather than a maze.
+      setVerification(
+        'This page cannot download the release itself, because a file opened from disk is not '
+        + 'allowed to read files from another site. It takes three steps instead:',
+        'unverified'
+      );
+      setNextSteps(els.reviewNextSteps, [
+        `Press Download Release to save ${candidate.assetName || 'the release file'}.`,
+        'Press Install Update From File and choose the file you just downloaded. '
+          + 'Its SHA-256 is checked against the official release before anything is migrated.',
+        'Press Download Updated HTML to save your upgraded tracker, then open that file from now on.'
+      ]);
     }
 
     showPanel('updateReviewPanel');
@@ -364,6 +411,53 @@ export function initUpdateUi({
     showToast('Data backup downloaded.');
   }
 
+  /**
+   * Restores projects from a backup file.
+   *
+   * This is the consumer the backup files never had. Without it, Export Data
+   * Backup produced something no part of the application could read back.
+   */
+  async function importDataBackup(file) {
+    if (!file) return;
+
+    let text;
+    try {
+      text = await file.text();
+    } catch (error) {
+      showToast(`Could not read that file: ${error.message}`);
+      return;
+    }
+
+    let restore;
+    try {
+      restore = prepareBackupRestore(text, { targetSchema: state.schemaVersion });
+    } catch (error) {
+      // Nothing has been touched: parsing, migration, and validation all run
+      // before anything is applied.
+      showToast(error?.message || 'That backup could not be read.');
+      return;
+    }
+
+    const incoming = restore.projects.length;
+    const current = state.projects.length;
+    const taken = restore.backedUpAt ? ` taken ${formatUpdated(restore.backedUpAt)}` : '';
+
+    const confirmed = confirmRestore(
+      `Replace the ${current} project${current === 1 ? '' : 's'} in this file with `
+      + `${incoming} from the backup${taken}?\n\n`
+      + 'Your current projects will be discarded. This only changes the page in memory, so your '
+      + 'file on disk is unchanged until you use Save Updated HTML.'
+    );
+    if (!confirmed) return;
+
+    replaceProjects(state, restore.projects);
+    redraw();
+    showToast(
+      `Restored ${incoming} project${incoming === 1 ? '' : 's'}. `
+      + 'Use Save Updated HTML to keep them.'
+    );
+  }
+
   /* ------------------------------------------------------------- wiring */
 
   els.updatesBtn.addEventListener('click', () => {
@@ -413,6 +507,13 @@ export function initUpdateUi({
   });
 
   els.exportBackupBtn.addEventListener('click', exportDataBackup);
+  els.importBackupBtn.addEventListener('click', () => {
+    els.backupFileInput.value = '';
+    els.backupFileInput.click();
+  });
+  els.backupFileInput.addEventListener('change', event => {
+    importDataBackup(event.target.files && event.target.files[0]);
+  });
   els.downloadBackupBtn.addEventListener('click', () => {
     if (!prepared?.backup) return;
     downloadBlob(

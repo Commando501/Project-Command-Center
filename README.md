@@ -46,6 +46,14 @@ GET requests for public release metadata, with no body, no credentials, and no
 referrer. Your data is merged with the new application locally, in your
 browser.
 
+## Backups
+
+**Updates → Export Data Backup** writes a JSON file containing your projects.
+**Import Data Backup** reads one back, replacing the projects in the page. An
+import only changes the page in memory, so if it is not what you wanted, close
+without saving and nothing has happened. Backups taken by an older version are
+migrated through the same engine an update uses.
+
 ## Data safety
 
 The update flow is transactional:
