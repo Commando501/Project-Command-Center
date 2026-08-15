@@ -157,6 +157,7 @@
   </dialog>
 
   <input id="updateFileInput" type="file" accept=".html,text/html" aria-hidden="true" />
+  <input id="backupFileInput" type="file" accept=".json,application/json" aria-hidden="true" />
 
   <dialog id="updatesDialog">
     <div class="modal-head">
@@ -206,6 +207,7 @@
           <div><span class="section-label">Released</span><strong id="reviewPublished">—</strong></div>
         </div>
         <div class="update-verification" id="reviewVerification">Not yet verified.</div>
+        <ol class="update-next-steps hidden" id="reviewNextSteps"></ol>
         <div class="section-label">Release notes</div>
         <ul class="update-notes" id="reviewNotes"><li>No release notes were provided.</li></ul>
       </section>
@@ -230,6 +232,7 @@
       <button class="btn" id="updateBackBtn" type="button">Back</button>
       <div class="modal-actions-right">
         <button class="btn" id="exportBackupBtn" type="button">Export Data Backup</button>
+        <button class="btn" id="importBackupBtn" type="button">Import Data Backup</button>
         <button class="btn" id="installFromFileBtn" type="button">Install Update From File</button>
         <button class="btn" id="checkUpdatesBtn" type="button">Check for Updates</button>
         <a class="btn hidden" id="downloadReleaseBtn" href="#" target="_blank" rel="noopener noreferrer">Download Release</a>

@@ -241,6 +241,22 @@ export function toggleComplete(state, id) {
   return { reopening };
 }
 
+/**
+ * Replaces every project with a restored set.
+ *
+ * Destructive in memory only: the file on disk is untouched until the user
+ * saves, so an unwanted restore is undone by closing without saving.
+ */
+export function replaceProjects(state, projects) {
+  const now = state.now();
+  state.projects = (Array.isArray(projects) ? projects : []).map(
+    project => normalizeProject(project, now)
+  );
+  state.openDetailIds.clear();
+  markDirty(state);
+  return state.projects.length;
+}
+
 export function setPreference(state, key, value) {
   if (!Object.hasOwn(state.preferences, key)) return false;
   if (state.preferences[key] === value) return false;

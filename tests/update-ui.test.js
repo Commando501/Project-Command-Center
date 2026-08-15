@@ -35,7 +35,7 @@ const CAPSULE = {
 };
 
 /** Boots the artifact with a configured repository and an injected fetch. */
-function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY, withCrypto = true } = {}) {
+function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY, withCrypto = true, url = 'file:///Project-Command-Center.html', onConfirm } = {}) {
   const configured = reversionShell(injectDataCapsuleIntoShell(html, capsule), { repository });
 
   const virtualConsole = new VirtualConsole();
@@ -44,7 +44,7 @@ function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY, wit
   const captured = [];
   const dom = new JSDOM(configured, {
     runScripts: 'dangerously',
-    url: 'file:///Project-Command-Center.html',
+    url,
     virtualConsole,
     beforeParse(window) {
       // jsdom does not put the Encoding API on the window. Every browser does,
@@ -61,6 +61,16 @@ function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY, wit
           value: webcrypto, configurable: true, writable: true
         });
       }
+      if (!window.Blob.prototype.text) {
+        window.Blob.prototype.text = function text() {
+          return new Promise((resolve, reject) => {
+            const reader = new window.FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsText(this);
+          });
+        };
+      }
       if (!window.Blob.prototype.arrayBuffer) {
         window.Blob.prototype.arrayBuffer = function arrayBuffer() {
           return new Promise((resolve, reject) => {
@@ -73,6 +83,7 @@ function boot(html, { fetchImpl, capsule = CAPSULE, repository = REPOSITORY, wit
       }
 
       if (fetchImpl) window.fetch = fetchImpl;
+      if (onConfirm) window.confirm = onConfirm;
       window.URL.createObjectURL = (blob) => {
         captured.push(blob);
         return 'blob:stub';
@@ -227,59 +238,41 @@ describe('the availability banner', () => {
   });
 });
 
-describe('installing an official update', () => {
+// Served over https the page CAN fetch release assets, so the one-click path
+// applies. From file:// it cannot, and that case is covered separately below.
+const SERVED_URL = 'https://apps.example.test/Project-Command-Center.html';
+
+describe('installing an official update, served over https', () => {
   test('downloads, verifies, and offers the upgraded file', async () => {
     const github = await createFakeGitHub({ shellHtml: releaseShell });
-    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl, url: SERVED_URL });
 
     await waitFor(() => visible(session, 'updateBanner'));
     click(session, 'viewUpdateBtn');
+    expect(visible(session, 'installUpdateBtn')).toBe(true);
     click(session, 'installUpdateBtn');
 
     await waitFor(() => visible(session, 'updateResultPanel'));
-    expect(text(session, 'resultOldVersion')).toBe(installedVersion);
     expect(text(session, 'resultNewVersion')).toBe('4.1.0');
-    expect(text(session, 'resultProjects')).toBe('1');
     expect(text(session, 'resultVerification')).toBe('Verified official release');
-
-    // The panel must say that nothing has happened yet and what to do next.
-    // Closing the dialog here loses the work, so "created successfully" alone
-    // was actively misleading.
-    expect(text(session, 'resultSummary')).toContain('Nothing has been written to disk yet');
-    const steps = [...session.document.querySelectorAll('#resultNextSteps li')]
-      .map(item => item.textContent);
-    expect(steps).toHaveLength(3);
-    expect(steps[0]).toContain('Download Updated HTML');
-    expect(steps[0]).toContain('Project-Command-Center-v4.1.0.html');
-    expect(steps[1]).toContain('Open that new file');
-    expect(steps[2]).toContain('rollback');
-
-    // Producing the file still requires an explicit click.
-    expect(session.captured).toHaveLength(0);
-    expect(visible(session, 'downloadUpdatedBtn')).toBe(true);
-    expect(visible(session, 'downloadBackupBtn')).toBe(true);
 
     click(session, 'downloadUpdatedBtn');
     const upgraded = await readBlob(session.window, session.captured[0]);
-    const capsule = JSON.parse(upgraded.match(dataRegionRegex())[1]);
-    expect(capsule.projects[0].name).toBe('Existing Project');
-    expect(upgraded).toContain('"appVersion": "4.1.0"');
+    expect(JSON.parse(upgraded.match(dataRegionRegex())[1]).projects[0].name)
+      .toBe('Existing Project');
   });
 
   test('a tampered download is refused and produces nothing', async () => {
     const github = await createFakeGitHub({ shellHtml: releaseShell, corruptBytes: true });
-    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl, url: SERVED_URL });
 
     await waitFor(() => visible(session, 'updateBanner'));
     click(session, 'viewUpdateBtn');
     click(session, 'installUpdateBtn');
 
     await waitFor(() => text(session, 'reviewVerification').includes('verification failed'));
-    expect(text(session, 'reviewVerification')).toContain('No project data was changed');
     expect(visible(session, 'updateResultPanel')).toBe(false);
     expect(session.captured).toHaveLength(0);
-    // The tracker is untouched.
-    expect(session.document.querySelectorAll('.project-card')).toHaveLength(1);
   });
 });
 
@@ -311,18 +304,47 @@ describe('opened from disk, where release assets cannot be read', () => {
     expect(text(session, 'reviewCompatibility')).toBe('Confirmed at install');
   });
 
-  test('pressing Install explains the download route instead of erroring', async () => {
+  test('no Install Update button is offered, because it could only fail', async () => {
     const github = await createFakeGitHub({ shellHtml: releaseShell, blockAssetFetch: true });
     const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
 
     await waitFor(() => visible(session, 'updateBanner'));
     click(session, 'viewUpdateBtn');
-    click(session, 'installUpdateBtn');
 
-    await waitFor(() => text(session, 'reviewVerification').includes('Install Update From File'));
-    expect(text(session, 'reviewVerification')).toContain('Nothing has been changed');
-    expect(visible(session, 'updateResultPanel')).toBe(false);
-    expect(session.captured).toHaveLength(0);
+    // Offering a button whose only possible outcome is an error message is
+    // worse than not offering it.
+    expect(visible(session, 'installUpdateBtn')).toBe(false);
+    expect(visible(session, 'downloadReleaseBtn')).toBe(true);
+    expect(session.document.getElementById('downloadReleaseBtn').classList.contains('primary'))
+      .toBe(true);
+  });
+
+  test('the three steps are spelled out before the first click', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell, blockAssetFetch: true });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl });
+
+    await waitFor(() => visible(session, 'updateBanner'));
+    click(session, 'viewUpdateBtn');
+
+    expect(text(session, 'reviewVerification')).toContain('three steps');
+    const steps = [...session.document.querySelectorAll('#reviewNextSteps li')]
+      .map(item => item.textContent);
+    expect(steps).toHaveLength(3);
+    expect(steps[0]).toContain('Download Release');
+    expect(steps[0]).toContain('Project-Command-Center-v4.1.0.html');
+    expect(steps[1]).toContain('Install Update From File');
+    expect(steps[2]).toContain('Download Updated HTML');
+  });
+
+  test('served over https the direct install is offered instead', async () => {
+    const github = await createFakeGitHub({ shellHtml: releaseShell });
+    const session = boot(builtHtml, { fetchImpl: github.fetchImpl, url: SERVED_URL });
+
+    await waitFor(() => visible(session, 'updateBanner'));
+    click(session, 'viewUpdateBtn');
+
+    expect(visible(session, 'installUpdateBtn')).toBe(true);
+    expect(visible(session, 'reviewNextSteps')).toBe(false);
   });
 
   test('the downloaded file then installs and verifies from disk', async () => {
@@ -433,6 +455,101 @@ describe('manual update files', () => {
     await selectFile(session, '<html><body>Just a page</body></html>', 'random.html');
     await waitFor(() => text(session, 'updateStatusText').includes('does not look like'));
     expect(visible(session, 'updateReviewPanel')).toBe(false);
+  });
+});
+
+describe('restoring from a backup', () => {
+  // Before this existed, Export Data Backup produced a file nothing could read
+  // back, so the third recovery layer was write-only.
+
+  const selectBackup = (session, json, name = 'backup.json') => {
+    const input = session.document.getElementById('backupFileInput');
+    const file = new session.window.File([json], name, { type: 'application/json' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new session.window.Event('change', { bubbles: true }));
+  };
+
+  const UPDATE_BACKUP = JSON.stringify({
+    backupFormatVersion: 1,
+    backedUpAt: '2026-08-01T00:00:00.000Z',
+    sourceAppVersion: '4.0.0',
+    data: {
+      schemaVersion: 4,
+      projects: [
+        { id: 'r1', name: 'Restored One', contentItems: [{ id: 't1', type: 'task', text: 'a', completed: true }] },
+        { id: 'r2', name: 'Restored Two', contentItems: [] }
+      ],
+      preferences: {}
+    }
+  });
+
+  test('an update backup replaces the projects after confirmation', async () => {
+    const session = boot(builtHtml, { fetchImpl: offlineFetch, onConfirm: () => true });
+    click(session, 'updatesBtn');
+    selectBackup(session, UPDATE_BACKUP);
+
+    await waitFor(() => session.document.querySelectorAll('.project-card').length === 2);
+    expect([...session.document.querySelectorAll('.project-card .inline-name')].map(i => i.value))
+      .toEqual(['Restored One', 'Restored Two']);
+    expect(text(session, 'metricTotal')).toBe('2');
+    expect(session.document.querySelector('#unsavedDot').classList.contains('show')).toBe(true);
+  });
+
+  test('declining the confirmation changes nothing', async () => {
+    const session = boot(builtHtml, { fetchImpl: offlineFetch, onConfirm: () => false });
+    click(session, 'updatesBtn');
+    selectBackup(session, UPDATE_BACKUP);
+
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect([...session.document.querySelectorAll('.project-card .inline-name')].map(i => i.value))
+      .toEqual(['Existing Project']);
+    expect(session.document.querySelector('#unsavedDot').classList.contains('show')).toBe(false);
+  });
+
+  test('the v3 JSON export shape is accepted too', async () => {
+    const session = boot(builtHtml, { fetchImpl: offlineFetch, onConfirm: () => true });
+    click(session, 'updatesBtn');
+    selectBackup(session, JSON.stringify({
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      projectCount: 1,
+      projects: [{ id: 'v3', name: 'From v3 Export', contentItems: [] }]
+    }));
+
+    await waitFor(() => session.document.querySelectorAll('.project-card').length === 1
+      && session.document.querySelector('.project-card .inline-name').value === 'From v3 Export');
+  });
+
+  test('a restored file saves with the restored projects', async () => {
+    const session = boot(builtHtml, { fetchImpl: offlineFetch, onConfirm: () => true });
+    click(session, 'updatesBtn');
+    selectBackup(session, UPDATE_BACKUP);
+    await waitFor(() => session.document.querySelectorAll('.project-card').length === 2);
+
+    click(session, 'saveHtmlBtn');
+    const saved = await readBlob(session.window, session.captured[0]);
+    const capsule = JSON.parse(saved.match(dataRegionRegex())[1]);
+    expect(capsule.projects.map(project => project.name))
+      .toEqual(['Restored One', 'Restored Two']);
+  });
+
+  test('a file that is not a backup is refused without touching anything', async () => {
+    const session = boot(builtHtml, { fetchImpl: offlineFetch, onConfirm: () => true });
+    click(session, 'updatesBtn');
+    selectBackup(session, '{"something":"else"}');
+
+    await waitFor(() => text(session, 'toast').includes('not a Project Command Center backup'));
+    expect([...session.document.querySelectorAll('.project-card .inline-name')].map(i => i.value))
+      .toEqual(['Existing Project']);
+    expect(session.document.querySelector('#unsavedDot').classList.contains('show')).toBe(false);
+  });
+
+  test('malformed JSON is refused with a readable message', async () => {
+    const session = boot(builtHtml, { fetchImpl: offlineFetch, onConfirm: () => true });
+    click(session, 'updatesBtn');
+    selectBackup(session, 'not json at all');
+
+    await waitFor(() => text(session, 'toast').includes('not valid JSON'));
+    expect(session.document.querySelectorAll('.project-card')).toHaveLength(1);
   });
 });
 

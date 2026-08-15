@@ -508,7 +508,8 @@ export function boot() {
     document,
     showToast,
     downloadBlob,
-    refreshSaveState
+    refreshSaveState,
+    redraw: draw
   });
   updates.startAutomaticCheck();
 
