@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { buildStandalone } from '../scripts/build-standalone.mjs';
+import { getBuiltArtifact } from './helpers/built-artifact.js';
 import { CURRENT_SCHEMA_VERSION } from '../src/persistence/data-capsule.js';
 import { extractDataFromHtml } from '../src/persistence/extract.js';
 import { injectDataCapsuleIntoShell } from '../src/persistence/standalone-export.js';
@@ -28,7 +28,7 @@ beforeAll(async () => {
   const [referenceHtml, fixtureJson, build] = await Promise.all([
     readFile('legacy/Project-Command-Center-v3.html', 'utf8'),
     readFile('tests/fixtures/legacy-v3-projects.json', 'utf8'),
-    buildStandalone()
+    getBuiltArtifact()
   ]);
 
   fixture = JSON.parse(fixtureJson);

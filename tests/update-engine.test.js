@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { buildStandalone } from '../scripts/build-standalone.mjs';
+import { getBuiltArtifact } from './helpers/built-artifact.js';
 import { REPOSITORY, createFakeGitHub, offlineFetch, reversionShell } from './helpers/fake-github.js';
 import { extractDataFromHtml } from '../src/persistence/extract.js';
 import { inspectReleaseShell } from '../src/updater/shell-inspector.js';
@@ -54,7 +54,7 @@ const CAPSULE = {
 let newerShell;
 
 beforeAll(async () => {
-  const build = await buildStandalone();
+  const build = await getBuiltArtifact();
   const html = await readFile(build.path, 'utf8');
   newerShell = reversionShell(html, { appVersion: '4.1.0', repository: REPOSITORY });
 }, 120000);
