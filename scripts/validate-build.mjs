@@ -42,9 +42,10 @@ export async function validateBuild(htmlPath, appVersion) {
   check(countOccurrences(html, LEGACY_DATA_END) === 0, 'Artifact contains a legacy v3 end marker.');
   check(countOccurrences(html, LEGACY_DATA_START_TOKEN) === 0, 'Artifact contains a legacy v3 marker token.');
 
-  // An icon is required, and it must be embedded. A file:// page with no icon
-  // makes the browser probe for one and log a cross-origin warning, and an
-  // icon loaded from anywhere else would break the self-contained guarantee.
+  // An icon is required, and it must be embedded: one loaded from anywhere
+  // else would break the self-contained guarantee. It does NOT suppress the
+  // "unsafe attempt to load URL" warning Chrome logs for file:// pages; that
+  // warning reproduces with the legacy v3 file, which declares no icon.
   const iconLinks = [...html.matchAll(/<link[^>]+rel\s*=\s*["']?icon["']?[^>]*>/gi)];
   check(iconLinks.length === 1, `Expected exactly one icon link, found ${iconLinks.length}.`);
   if (iconLinks.length === 1) {
