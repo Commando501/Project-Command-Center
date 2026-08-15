@@ -98,6 +98,22 @@ export function createLinkItem() {
   return { id: makeId(), type: 'link', label: '', url: '' };
 }
 
+function imageItems(project) {
+  return (Array.isArray(project?.contentItems) ? project.contentItems : [])
+    .filter(item => item && item.type === 'image');
+}
+
+/** Optimized bytes actually occupied by embedded images. */
+export function projectImageBytes(project) {
+  return imageItems(project)
+    .reduce((sum, item) => sum + Math.max(0, Number(item.sizeBytes) || 0), 0);
+}
+
+/** Data-URL length, which is what those images cost inside the HTML file. */
+export function projectEmbeddedImageBytes(project) {
+  return imageItems(project).reduce((sum, item) => sum + String(item.src || '').length, 0);
+}
+
 /** Field-by-field update rules and length caps, matching v3 exactly. */
 export function applyContentItemUpdate(item, changes) {
   if (!item || !changes) return false;
