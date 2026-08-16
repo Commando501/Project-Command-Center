@@ -124,14 +124,25 @@ export function boot() {
       return;
     }
 
+    // The file is remembered but nothing is being written to it: permission
+    // lapsed across a browser restart and re-granting needs a real click.
+    // Without saying so, this state renders identically to a tracker that
+    // never had autosave, and the next edit or restore goes nowhere.
+    const paused = Boolean(autosave.handle) && !failed;
+
     els.unsavedDot.classList.toggle('show', state.dirty);
     els.saveStateText.textContent = failed
       ? 'Autosave stopped.'
-      : (state.dirty ? 'You have unsaved changes.' : 'All embedded data is current.');
+      : paused
+        ? 'Autosave is paused.'
+        : (state.dirty ? 'You have unsaved changes.' : 'All embedded data is current.');
     if (els.saveNoteDetail) {
       els.saveNoteDetail.innerHTML = failed
         ? `${escapeHtml(autosave.status.message)} Your work is still here — use <strong>Save Updated HTML</strong>, or switch autosave back on.`
-        : DEFAULT_SAVE_DETAIL;
+        : paused
+          ? `Nothing is being written to <span class="autosave-target">${escapeHtml(autosave.handle.name)}</span> — your browser needs permission again after a restart. `
+            + 'Click <strong>Resume autosave</strong>, or use <strong>Save Updated HTML</strong>.'
+          : DEFAULT_SAVE_DETAIL;
     }
   };
 
@@ -693,6 +704,7 @@ export function boot() {
     showToast,
     downloadBlob,
     refreshSaveState,
+    isAutosaveActive: () => autosave.active,
     redraw: draw
   });
   updates.startAutomaticCheck();

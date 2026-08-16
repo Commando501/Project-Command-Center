@@ -28,6 +28,12 @@ export function initUpdateUi({
   downloadBlob,
   refreshSaveState,
   redraw,
+  /**
+   * Whether an in-place autosave is running. A restore is described very
+   * differently depending on the answer: with autosave off it touches memory
+   * only, with autosave on it lands in the user's file moments later.
+   */
+  isAutosaveActive = () => false,
   confirmRestore = (message) => globalThis.confirm(message),
   fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : undefined
 }) {
@@ -442,19 +448,26 @@ export function initUpdateUi({
     const current = state.projects.length;
     const taken = restore.backedUpAt ? ` taken ${formatUpdated(restore.backedUpAt)}` : '';
 
+    const autosaving = isAutosaveActive();
+
     const confirmed = confirmRestore(
       `Replace the ${current} project${current === 1 ? '' : 's'} in this file with `
       + `${incoming} from the backup${taken}?\n\n`
-      + 'Your current projects will be discarded. This only changes the page in memory, so your '
-      + 'file on disk is unchanged until you use Save Updated HTML.'
+      + 'Your current projects will be discarded. '
+      + (autosaving
+        // Saying the file on disk is safe would be false here, and this is a
+        // consent prompt: autosave commits the replacement seconds later.
+        ? 'Autosave is on, so this will be written to your file.'
+        : 'This only changes the page in memory, so your file on disk is unchanged '
+          + 'until you use Save Updated HTML.')
     );
     if (!confirmed) return;
 
     replaceProjects(state, restore.projects);
     redraw();
     showToast(
-      `Restored ${incoming} project${incoming === 1 ? '' : 's'}. `
-      + 'Use Save Updated HTML to keep them.'
+      `Restored ${incoming} project${incoming === 1 ? '' : 's'}.`
+      + (autosaving ? '' : ' Use Save Updated HTML to keep them.')
     );
   }
 
