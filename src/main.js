@@ -34,8 +34,10 @@ import {
   autosaveTargetKey,
   createAutosaveScheduler,
   createHandleStore,
+  currentFileName,
   ensureWritePermission,
   isAutosaveSupported,
+  isEmptyTarget,
   pickAutosaveTarget,
   writeHtmlToHandle
 } from './persistence/autosave.js';
@@ -91,6 +93,8 @@ export function boot() {
 
   // In-place autosave. Session state only; the stored file handle is the
   // persistent part, and its presence is what "autosave is on" means.
+  const ownFileName = currentFileName(globalThis);
+
   const autosave = {
     supported: isAutosaveSupported(globalThis),
     handle: null,
@@ -101,7 +105,15 @@ export function boot() {
 
   const DEFAULT_SAVE_DETAIL =
     'Inline changes stay in memory while this page is open. '
-    + 'Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.';
+    + 'Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.'
+    // A hidden control is indistinguishable from a broken one. Without this,
+    // a browser that withholds the API looks exactly like a browser where
+    // autosave is silently failing, and there is nothing on screen to tell
+    // anyone which. Downloads keep working either way.
+    + (isAutosaveSupported(globalThis)
+      ? ''
+      : ' Autosave is unavailable here: this browser does not expose the File System Access API. '
+        + 'Chrome and Edge do. Brave keeps it behind a flag. Firefox and Safari do not implement it.');
 
   const refreshSaveState = () => {
     const note = els.saveStateText.closest('.save-note');
@@ -117,21 +129,42 @@ export function boot() {
       els.unsavedDot.classList.toggle('show', busy);
       els.saveStateText.textContent = busy ? 'Saving…' : 'Saved to your file.';
       if (els.saveNoteDetail) {
+        // Writing somewhere other than the page you are looking at is a
+        // legitimate choice, but it silently looks identical to a working
+        // setup: every save succeeds and the file you keep reopening never
+        // changes. Say which file is receiving the bytes.
+        const elsewhere = Boolean(ownFileName)
+          && Boolean(autosave.handle?.name)
+          && autosave.handle.name !== ownFileName;
         els.saveNoteDetail.innerHTML =
           `Autosaving to <span class="autosave-target">${escapeHtml(autosave.handle?.name || 'your file')}</span>. `
-          + 'Updates still create a new file and never overwrite this one.';
+          + (elsewhere
+            ? `That is <strong>not the file you have open</strong> (${escapeHtml(ownFileName)}), `
+              + 'so reopening this one will not show these changes.'
+            : 'Updates still create a new file and never overwrite this one.');
       }
       return;
     }
 
+    // The file is remembered but nothing is being written to it: permission
+    // lapsed across a browser restart and re-granting needs a real click.
+    // Without saying so, this state renders identically to a tracker that
+    // never had autosave, and the next edit or restore goes nowhere.
+    const paused = Boolean(autosave.handle) && !failed;
+
     els.unsavedDot.classList.toggle('show', state.dirty);
     els.saveStateText.textContent = failed
       ? 'Autosave stopped.'
-      : (state.dirty ? 'You have unsaved changes.' : 'All embedded data is current.');
+      : paused
+        ? 'Autosave is paused.'
+        : (state.dirty ? 'You have unsaved changes.' : 'All embedded data is current.');
     if (els.saveNoteDetail) {
       els.saveNoteDetail.innerHTML = failed
         ? `${escapeHtml(autosave.status.message)} Your work is still here — use <strong>Save Updated HTML</strong>, or switch autosave back on.`
-        : DEFAULT_SAVE_DETAIL;
+        : paused
+          ? `Nothing is being written to <span class="autosave-target">${escapeHtml(autosave.handle.name)}</span> — your browser needs permission again after a restart. `
+            + 'Click <strong>Resume autosave</strong>, or use <strong>Save Updated HTML</strong>.'
+          : DEFAULT_SAVE_DETAIL;
     }
   };
 
@@ -226,10 +259,36 @@ export function boot() {
   const enableAutosave = async () => {
     try {
       if (!autosave.handle) {
-        autosave.handle = await pickAutosaveTarget(
+        // The file this page came from, so the dialog opens on it and choosing
+        // it is an overwrite rather than a new file sitting beside it.
+        const picked = await pickAutosaveTarget(
           globalThis,
-          `Project-Command-Center-v${metadata.appVersion}.html`
+          ownFileName || `Project-Command-Center-v${metadata.appVersion}.html`
         );
+
+        // The browser exposes no path, only a name, so a same-named file in
+        // another folder is indistinguishable from the tracker being viewed —
+        // and the dialog opens wherever it was last used, not where this page
+        // lives. A file the picker had to create is empty, which is the one
+        // signal that separates "overwrite my tracker" from "start a second
+        // copy that silently receives everything from now on".
+        if (await isEmptyTarget(picked)) {
+          const proceed = globalThis.confirm(
+            `"${picked.name}" is a new, empty file.\n\n`
+            + 'If you meant to keep saving the tracker you have open, cancel and pick the '
+            + 'existing file instead — it lives in the folder this page was opened from, '
+            + 'which is not necessarily the folder the dialog started in. A same-named file '
+            + 'in another folder looks identical here.\n\n'
+            + 'Autosave to the new empty file anyway?'
+          );
+          if (!proceed) {
+            refreshAutosaveControls();
+            refreshSaveState();
+            return;
+          }
+        }
+
+        autosave.handle = picked;
         await autosave.store?.save(autosave.handle);
       }
       const permission = await ensureWritePermission(autosave.handle, { interactive: true });
@@ -693,6 +752,8 @@ export function boot() {
     showToast,
     downloadBlob,
     refreshSaveState,
+    isAutosaveActive: () => autosave.active,
+    flushAutosave: () => autosaveScheduler.flush(),
     redraw: draw
   });
   updates.startAutomaticCheck();

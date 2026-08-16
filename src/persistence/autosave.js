@@ -47,6 +47,42 @@ export function autosaveTargetKey(win = globalThis) {
   return hash === -1 ? href : href.slice(0, hash);
 }
 
+/**
+ * The name of the file this page was loaded from, if it has one.
+ *
+ * The picker's suggested name has to be this and not the release filename.
+ * Suggesting a name the user does not have turns the Save dialog into a
+ * create-a-new-file dialog: they accept the default, autosave writes to that
+ * second file forever, and every report of success is true and useless while
+ * the file they keep reopening never changes.
+ */
+export function currentFileName(win = globalThis) {
+  try {
+    const { pathname } = new URL(String(win?.location?.href || ''));
+    const name = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
+    return /\.html?$/i.test(name) ? name : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Whether the picked target is a file the picker had to create.
+ *
+ * A zero-byte target means the user accepted a suggested name in a folder that
+ * did not already contain it. Unknowable failures are reported as false: a
+ * target that cannot be read is a problem for the write to surface, not a
+ * reason to interrogate someone who picked correctly.
+ */
+export async function isEmptyTarget(handle) {
+  try {
+    const file = await handle?.getFile?.();
+    return Boolean(file) && file.size === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function ensureWritePermission(handle, { interactive = false } = {}) {
   const descriptor = { mode: 'readwrite' };
   try {

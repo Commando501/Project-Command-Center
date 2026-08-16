@@ -28,6 +28,19 @@ export function initUpdateUi({
   downloadBlob,
   refreshSaveState,
   redraw,
+  /**
+   * Whether an in-place autosave is running. A restore is described very
+   * differently depending on the answer: with autosave off it touches memory
+   * only, with autosave on it lands in the user's file moments later.
+   */
+  isAutosaveActive = () => false,
+  /**
+   * Writes a pending autosave now instead of after the debounce. A restore
+   * replaces every project at once, and the natural next move after one is to
+   * reload or close the page to check the result — precisely the window the
+   * debounce would leave unwritten.
+   */
+  flushAutosave = () => {},
   confirmRestore = (message) => globalThis.confirm(message),
   fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : undefined
 }) {
@@ -442,19 +455,27 @@ export function initUpdateUi({
     const current = state.projects.length;
     const taken = restore.backedUpAt ? ` taken ${formatUpdated(restore.backedUpAt)}` : '';
 
+    const autosaving = isAutosaveActive();
+
     const confirmed = confirmRestore(
       `Replace the ${current} project${current === 1 ? '' : 's'} in this file with `
       + `${incoming} from the backup${taken}?\n\n`
-      + 'Your current projects will be discarded. This only changes the page in memory, so your '
-      + 'file on disk is unchanged until you use Save Updated HTML.'
+      + 'Your current projects will be discarded. '
+      + (autosaving
+        // Saying the file on disk is safe would be false here, and this is a
+        // consent prompt: autosave commits the replacement seconds later.
+        ? 'Autosave is on, so this will be written to your file.'
+        : 'This only changes the page in memory, so your file on disk is unchanged '
+          + 'until you use Save Updated HTML.')
     );
     if (!confirmed) return;
 
     replaceProjects(state, restore.projects);
     redraw();
+    if (autosaving) flushAutosave();
     showToast(
-      `Restored ${incoming} project${incoming === 1 ? '' : 's'}. `
-      + 'Use Save Updated HTML to keep them.'
+      `Restored ${incoming} project${incoming === 1 ? '' : 's'}.`
+      + (autosaving ? '' : ' Use Save Updated HTML to keep them.')
     );
   }
 
