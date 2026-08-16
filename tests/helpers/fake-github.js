@@ -20,6 +20,12 @@ export function assetUrl(name) {
  * Every request the client makes is recorded so privacy can be asserted.
  */
 export async function createFakeGitHub({
+  /**
+   * A placeholder, not a meaningful default. Any suite that boots the real
+   * built artifact must pass a version derived from the installed one, or the
+   * "newer release" stops being newer as soon as the package reaches this
+   * number and every discovery test fails. That happened when 4.1.0 shipped.
+   */
   version = '4.1.0',
   shellHtml,
   manifestOverrides = {},

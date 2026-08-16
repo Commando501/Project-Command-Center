@@ -1,6 +1,7 @@
 # Project Command Center v4 — As Built
 
-**Status:** shipped. Releases 4.0.0 through 4.0.6 are published.
+**Status:** shipped. Releases 4.0.0 through 4.1.0 are published. 4.1.0 added
+in-place autosave; the schema is unchanged at 4.
 
 This describes what exists, which is not identical to what was designed. The
 design specification remains the statement of intent; where the two disagree,
