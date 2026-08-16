@@ -37,6 +37,7 @@ import {
   currentFileName,
   ensureWritePermission,
   isAutosaveSupported,
+  isEmptyTarget,
   pickAutosaveTarget,
   writeHtmlToHandle
 } from './persistence/autosave.js';
@@ -252,10 +253,34 @@ export function boot() {
       if (!autosave.handle) {
         // The file this page came from, so the dialog opens on it and choosing
         // it is an overwrite rather than a new file sitting beside it.
-        autosave.handle = await pickAutosaveTarget(
+        const picked = await pickAutosaveTarget(
           globalThis,
           ownFileName || `Project-Command-Center-v${metadata.appVersion}.html`
         );
+
+        // The browser exposes no path, only a name, so a same-named file in
+        // another folder is indistinguishable from the tracker being viewed —
+        // and the dialog opens wherever it was last used, not where this page
+        // lives. A file the picker had to create is empty, which is the one
+        // signal that separates "overwrite my tracker" from "start a second
+        // copy that silently receives everything from now on".
+        if (await isEmptyTarget(picked)) {
+          const proceed = globalThis.confirm(
+            `"${picked.name}" is a new, empty file.\n\n`
+            + 'If you meant to keep saving the tracker you have open, cancel and pick the '
+            + 'existing file instead — it lives in the folder this page was opened from, '
+            + 'which is not necessarily the folder the dialog started in. A same-named file '
+            + 'in another folder looks identical here.\n\n'
+            + 'Autosave to the new empty file anyway?'
+          );
+          if (!proceed) {
+            refreshAutosaveControls();
+            refreshSaveState();
+            return;
+          }
+        }
+
+        autosave.handle = picked;
         await autosave.store?.save(autosave.handle);
       }
       const permission = await ensureWritePermission(autosave.handle, { interactive: true });

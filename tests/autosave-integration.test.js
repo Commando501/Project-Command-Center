@@ -102,6 +102,9 @@ function boot({
   rememberedPermission = null,
   html = null,
   pickedName = 'Project-Command-Center.html',
+  /** 0 is what the picker hands back when it has just created the file. */
+  pickedSize = 170000,
+  confirmTarget = () => true,
   url = 'file:///Project-Command-Center.html'
 } = {}) {
   // `html` reopens bytes autosave produced, rather than building a fresh shell.
@@ -113,6 +116,8 @@ function boot({
   const writes = [];
   /** Whatever was handed to showSaveFilePicker. */
   const pickerOptions = [];
+  /** Every confirm() message the app raised. */
+  const confirmations = [];
 
   const dom = new JSDOM(configured, {
     runScripts: 'dangerously',
@@ -122,7 +127,10 @@ function boot({
       window.TextDecoder = TextDecoder;
       window.TextEncoder = TextEncoder;
       window.fetch = () => Promise.reject(new Error('offline'));
-      window.confirm = () => true;
+      window.confirm = (message) => {
+        confirmations.push(String(message));
+        return confirmTarget(String(message));
+      };
       window.URL.createObjectURL = () => 'blob:stub';
       window.URL.revokeObjectURL = () => {};
       window.HTMLDialogElement.prototype.showModal = function showModal() {
@@ -144,6 +152,7 @@ function boot({
 
       const makeHandle = (permission = 'granted', name = 'Tracker.html') => ({
         name,
+        getFile: async () => ({ name, size: pickedSize, lastModified: 0 }),
         queryPermission: async () => permission,
         requestPermission: async () => 'granted',
         createWritable: async () => ({
@@ -169,7 +178,7 @@ function boot({
     }
   });
 
-  return { dom, window: dom.window, document: dom.window.document, writes, pickerOptions };
+  return { dom, window: dom.window, document: dom.window.document, writes, pickerOptions, confirmations };
 }
 
 const click = (session, id) => session.document.getElementById(id)
@@ -309,6 +318,33 @@ describe('choosing which file autosave writes to', () => {
     expect(note).toContain('Somewhere-Else.html');
     expect(note).toContain('My Projects.html');
     expect(note).toMatch(/not the file you have open/i);
+  });
+
+  test('a target the picker just created is queried before it is adopted', async () => {
+    // The dangerous case has matching names: the dialog opens in Downloads,
+    // the suggested name is accepted, and a second file appears with the same
+    // name as the tracker. Nothing about the handle distinguishes it — the
+    // browser exposes no path — but a file the picker created is empty, and
+    // that is the signature worth stopping on.
+    const session = boot({ pickedSize: 0, confirmTarget: () => false });
+
+    await waitFor(() => !session.document.getElementById('autosaveBtn').classList.contains('hidden'));
+    click(session, 'autosaveBtn');
+    await waitFor(() => session.confirmations.length > 0);
+
+    expect(session.confirmations[0]).toMatch(/empty|new file/i);
+
+    // Declining must leave autosave off rather than armed at the wrong file.
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(session.writes).toHaveLength(0);
+    expect(session.document.getElementById('autosaveBtn').textContent).toContain('Autosave to a file');
+  });
+
+  test('an existing file is adopted without an extra question', async () => {
+    const session = boot({ pickedSize: 170000 });
+    await armAutosave(session);
+
+    expect(session.confirmations).toHaveLength(0);
   });
 
   test('no warning when it is the same file', async () => {

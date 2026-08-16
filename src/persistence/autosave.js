@@ -66,6 +66,23 @@ export function currentFileName(win = globalThis) {
   }
 }
 
+/**
+ * Whether the picked target is a file the picker had to create.
+ *
+ * A zero-byte target means the user accepted a suggested name in a folder that
+ * did not already contain it. Unknowable failures are reported as false: a
+ * target that cannot be read is a problem for the write to surface, not a
+ * reason to interrogate someone who picked correctly.
+ */
+export async function isEmptyTarget(handle) {
+  try {
+    const file = await handle?.getFile?.();
+    return Boolean(file) && file.size === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function ensureWritePermission(handle, { interactive = false } = {}) {
   const descriptor = { mode: 'readwrite' };
   try {
