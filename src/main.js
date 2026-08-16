@@ -34,6 +34,7 @@ import {
   autosaveTargetKey,
   createAutosaveScheduler,
   createHandleStore,
+  currentFileName,
   ensureWritePermission,
   isAutosaveSupported,
   pickAutosaveTarget,
@@ -91,6 +92,8 @@ export function boot() {
 
   // In-place autosave. Session state only; the stored file handle is the
   // persistent part, and its presence is what "autosave is on" means.
+  const ownFileName = currentFileName(globalThis);
+
   const autosave = {
     supported: isAutosaveSupported(globalThis),
     handle: null,
@@ -117,9 +120,19 @@ export function boot() {
       els.unsavedDot.classList.toggle('show', busy);
       els.saveStateText.textContent = busy ? 'Saving…' : 'Saved to your file.';
       if (els.saveNoteDetail) {
+        // Writing somewhere other than the page you are looking at is a
+        // legitimate choice, but it silently looks identical to a working
+        // setup: every save succeeds and the file you keep reopening never
+        // changes. Say which file is receiving the bytes.
+        const elsewhere = Boolean(ownFileName)
+          && Boolean(autosave.handle?.name)
+          && autosave.handle.name !== ownFileName;
         els.saveNoteDetail.innerHTML =
           `Autosaving to <span class="autosave-target">${escapeHtml(autosave.handle?.name || 'your file')}</span>. `
-          + 'Updates still create a new file and never overwrite this one.';
+          + (elsewhere
+            ? `That is <strong>not the file you have open</strong> (${escapeHtml(ownFileName)}), `
+              + 'so reopening this one will not show these changes.'
+            : 'Updates still create a new file and never overwrite this one.');
       }
       return;
     }
@@ -237,9 +250,11 @@ export function boot() {
   const enableAutosave = async () => {
     try {
       if (!autosave.handle) {
+        // The file this page came from, so the dialog opens on it and choosing
+        // it is an overwrite rather than a new file sitting beside it.
         autosave.handle = await pickAutosaveTarget(
           globalThis,
-          `Project-Command-Center-v${metadata.appVersion}.html`
+          ownFileName || `Project-Command-Center-v${metadata.appVersion}.html`
         );
         await autosave.store?.save(autosave.handle);
       }
@@ -705,6 +720,7 @@ export function boot() {
     downloadBlob,
     refreshSaveState,
     isAutosaveActive: () => autosave.active,
+    flushAutosave: () => autosaveScheduler.flush(),
     redraw: draw
   });
   updates.startAutomaticCheck();

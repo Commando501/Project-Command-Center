@@ -47,6 +47,25 @@ export function autosaveTargetKey(win = globalThis) {
   return hash === -1 ? href : href.slice(0, hash);
 }
 
+/**
+ * The name of the file this page was loaded from, if it has one.
+ *
+ * The picker's suggested name has to be this and not the release filename.
+ * Suggesting a name the user does not have turns the Save dialog into a
+ * create-a-new-file dialog: they accept the default, autosave writes to that
+ * second file forever, and every report of success is true and useless while
+ * the file they keep reopening never changes.
+ */
+export function currentFileName(win = globalThis) {
+  try {
+    const { pathname } = new URL(String(win?.location?.href || ''));
+    const name = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
+    return /\.html?$/i.test(name) ? name : '';
+  } catch {
+    return '';
+  }
+}
+
 export async function ensureWritePermission(handle, { interactive = false } = {}) {
   const descriptor = { mode: 'readwrite' };
   try {

@@ -34,6 +34,13 @@ export function initUpdateUi({
    * only, with autosave on it lands in the user's file moments later.
    */
   isAutosaveActive = () => false,
+  /**
+   * Writes a pending autosave now instead of after the debounce. A restore
+   * replaces every project at once, and the natural next move after one is to
+   * reload or close the page to check the result — precisely the window the
+   * debounce would leave unwritten.
+   */
+  flushAutosave = () => {},
   confirmRestore = (message) => globalThis.confirm(message),
   fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : undefined
 }) {
@@ -465,6 +472,7 @@ export function initUpdateUi({
 
     replaceProjects(state, restore.projects);
     redraw();
+    if (autosaving) flushAutosave();
     showToast(
       `Restored ${incoming} project${incoming === 1 ? '' : 's'}.`
       + (autosaving ? '' : ' Use Save Updated HTML to keep them.')

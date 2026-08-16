@@ -29,6 +29,32 @@ const CAPSULE = {
 
 const IMPORTED_NAME = 'Imported From Backup';
 
+/** A real 1x1 PNG, so the image survives normalization rather than being dropped. */
+const PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+const BACKUP_WITH_IMAGE = JSON.stringify({
+  exportedAt: '2026-08-01T00:00:00.000Z',
+  projectCount: 1,
+  projects: [{
+    id: 'restored-img',
+    name: IMPORTED_NAME,
+    status: 'Active',
+    priority: 'High',
+    notes: 'imported note',
+    contentItems: [{
+      id: 'img1',
+      type: 'image',
+      src: PNG_DATA_URL,
+      caption: 'imported image',
+      filename: 'dot.png',
+      mimeType: 'image/png',
+      width: 1,
+      height: 1,
+      sizeBytes: 70
+    }]
+  }]
+});
+
 const BACKUP_JSON = JSON.stringify({
   exportedAt: '2026-08-01T00:00:00.000Z',
   projectCount: 1,
@@ -71,17 +97,26 @@ function createFakeIndexedDb(seed = new Map()) {
   };
 }
 
-function boot({ capsule = CAPSULE, rememberedPermission = null } = {}) {
-  const configured = injectDataCapsuleIntoShell(builtHtml, capsule);
+function boot({
+  capsule = CAPSULE,
+  rememberedPermission = null,
+  html = null,
+  pickedName = 'Project-Command-Center.html',
+  url = 'file:///Project-Command-Center.html'
+} = {}) {
+  // `html` reopens bytes autosave produced, rather than building a fresh shell.
+  const configured = html || injectDataCapsuleIntoShell(builtHtml, capsule);
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', () => {});
 
   /** Every byte autosave has committed, in order. */
   const writes = [];
+  /** Whatever was handed to showSaveFilePicker. */
+  const pickerOptions = [];
 
   const dom = new JSDOM(configured, {
     runScripts: 'dangerously',
-    url: 'file:///Project-Command-Center.html',
+    url,
     virtualConsole,
     beforeParse(window) {
       window.TextDecoder = TextDecoder;
@@ -107,8 +142,8 @@ function boot({ capsule = CAPSULE, rememberedPermission = null } = {}) {
         };
       }
 
-      const makeHandle = (permission = 'granted') => ({
-        name: 'Tracker.html',
+      const makeHandle = (permission = 'granted', name = 'Tracker.html') => ({
+        name,
         queryPermission: async () => permission,
         requestPermission: async () => 'granted',
         createWritable: async () => ({
@@ -127,11 +162,14 @@ function boot({ capsule = CAPSULE, rememberedPermission = null } = {}) {
         ]))
         : {};
 
-      window.showSaveFilePicker = async () => makeHandle();
+      window.showSaveFilePicker = async (options) => {
+        pickerOptions.push(options);
+        return makeHandle('granted', pickedName);
+      };
     }
   });
 
-  return { dom, window: dom.window, document: dom.window.document, writes };
+  return { dom, window: dom.window, document: dom.window.document, writes, pickerOptions };
 }
 
 const click = (session, id) => session.document.getElementById(id)
@@ -195,6 +233,40 @@ describe('autosave reaches every mutation', () => {
     expect(session.writes.at(-1)).not.toContain('Original Project');
   });
 
+  test('reopening the autosaved file still shows the imported projects', async () => {
+    // The bytes containing the right text is only half of it. What the user
+    // actually checks is whether the data is there when the file is opened
+    // again, which nothing asserted.
+    const session = boot();
+    await armAutosave(session);
+    const before = session.writes.length;
+
+    selectBackup(session, BACKUP_WITH_IMAGE);
+    await waitFor(() => session.writes.length > before);
+    const saved = session.writes.at(-1);
+
+    const reopened = boot({ html: saved });
+    await waitFor(() => reopened.document.body.textContent.includes(IMPORTED_NAME));
+
+    const img = reopened.document.querySelector('.embedded-image');
+    expect(img?.getAttribute('src')).toBe(PNG_DATA_URL);
+  });
+
+  test('a restore is written immediately, not after the keystroke debounce', async () => {
+    // Coalescing exists for typing. A restore is one deliberate bulk action,
+    // and the 1200 ms wait only creates a window in which reloading or closing
+    // the page loses every imported project.
+    const session = boot();
+    await armAutosave(session);
+    const before = session.writes.length;
+
+    const started = Date.now();
+    selectBackup(session, BACKUP_JSON);
+    await waitFor(() => session.writes.length > before);
+
+    expect(Date.now() - started).toBeLessThan(600);
+  });
+
   test('the restore toast does not send the user to a save it does not need', async () => {
     const session = boot();
     await armAutosave(session);
@@ -206,6 +278,48 @@ describe('autosave reaches every mutation', () => {
     // teaches them the import was not persisted, which is the opposite of true.
     expect(session.document.getElementById('toast').textContent)
       .not.toContain('Save Updated HTML');
+  });
+});
+
+describe('choosing which file autosave writes to', () => {
+  // The picker used to suggest the release filename. Anyone whose tracker is
+  // named anything else got a Save dialog pre-filled with a name they did not
+  // have, and clicking Save created a second file. Autosave then wrote to that
+  // one forever while the original never changed — and reported success, which
+  // was true and useless.
+
+  test('the picker is offered the name of the file already open', async () => {
+    const session = boot({ url: 'file:///C:/trackers/My%20Projects.html' });
+
+    await waitFor(() => !session.document.getElementById('autosaveBtn').classList.contains('hidden'));
+    click(session, 'autosaveBtn');
+    await waitFor(() => session.pickerOptions.length > 0);
+
+    expect(session.pickerOptions[0].suggestedName).toBe('My Projects.html');
+  });
+
+  test('autosaving to a file other than the one open says so', async () => {
+    const session = boot({
+      url: 'file:///C:/trackers/My%20Projects.html',
+      pickedName: 'Somewhere-Else.html'
+    });
+    await armAutosave(session);
+
+    const note = session.document.querySelector('.save-note').textContent;
+    expect(note).toContain('Somewhere-Else.html');
+    expect(note).toContain('My Projects.html');
+    expect(note).toMatch(/not the file you have open/i);
+  });
+
+  test('no warning when it is the same file', async () => {
+    const session = boot({
+      url: 'file:///C:/trackers/My%20Projects.html',
+      pickedName: 'My Projects.html'
+    });
+    await armAutosave(session);
+
+    const note = session.document.querySelector('.save-note').textContent;
+    expect(note).not.toMatch(/not the file you have open/i);
   });
 });
 
