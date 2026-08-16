@@ -10,3 +10,9 @@ coverage/
 # Anchored to the root, so legacy/Project-Command-Center-v3.html stays tracked.
 /Project-Command-Center-*.html
 /Project-Command-Center-Backup*.json
+
+# Somewhere to keep data backups and working trackers inside the repo without
+# ever committing them. The contents are user data; only the folder itself is
+# tracked, following the same pattern as dist/.
+backup/*
+!backup/.gitkeep
