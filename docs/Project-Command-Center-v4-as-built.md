@@ -57,7 +57,7 @@ src/
 ```
 
 `scripts/` holds the build, the build validator, and the manifest generator.
-`tests/` holds 517 tests across 27 files.
+`tests/` holds 522 tests across 28 files.
 
 ---
 
@@ -134,6 +134,21 @@ let two trackers adopt each other's save target. Permission is not guaranteed
 to survive a browser restart, so a stored handle whose permission has lapsed
 offers a button rather than resuming silently — prompting requires a real
 click.
+
+**That paused state says so.** It used to be visible only as a relabelled
+button, while the save strip read "All embedded data is current" — the same
+thing a tracker that never had autosave shows, and untrue, since nothing was
+being written. The strip now names the state, the file, and the way out. This
+mattered more than it looks: a backup import is what people do right after
+opening a file, which is exactly when a lapsed permission leaves autosave
+dormant, so the operation most likely to be silently discarded was the one
+that replaces every project.
+
+The wiring between a user action and a committed write is covered by
+`tests/autosave-integration.test.js`, which drives the built artifact. The
+autosave unit tests cover permission, the write, and the scheduler in
+isolation, and a mutation that never reached the scheduler would satisfy all
+of them.
 
 The update pipeline is deliberately not routed through this. An update still
 produces a new versioned file and never touches the running one, which is what
@@ -225,9 +240,18 @@ The JSON export is the v3 shape, unchanged.
 
 Restoring runs through the same migration and validation engine an update
 uses, so an old backup upgrades exactly as an old file does and one that fails
-validation is refused rather than half-restored. It replaces projects **in
-memory only** — the file on disk is untouched until the user saves, so an
-unwanted restore is undone by closing the page.
+validation is refused rather than half-restored. It replaces projects in
+memory, and what happens to the file then depends on autosave.
+
+With autosave off, the file on disk is untouched until the user saves, so an
+unwanted restore is undone by closing the page. **With autosave on, the
+replacement is committed to the file seconds later**, and closing the page
+undoes nothing. The confirmation prompt is a consent step, so it states which
+of the two is about to happen rather than always promising the first; the
+success message likewise stops directing the user to a save that already
+happened. Recovering from a restore made under autosave means reopening the
+previous file or a backup, which is what the recovery layers in section 23 of
+the design are for.
 
 ---
 
