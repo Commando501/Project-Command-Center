@@ -104,6 +104,7 @@ function boot({
   pickedName = 'Project-Command-Center.html',
   /** 0 is what the picker hands back when it has just created the file. */
   pickedSize = 170000,
+  autosaveSupported = true,
   confirmTarget = () => true,
   url = 'file:///Project-Command-Center.html'
 } = {}) {
@@ -171,10 +172,14 @@ function boot({
         ]))
         : {};
 
-      window.showSaveFilePicker = async (options) => {
-        pickerOptions.push(options);
-        return makeHandle('granted', pickedName);
-      };
+      // Left undefined for the unsupported case, which is what Brave and
+      // Firefox look like: the API simply is not there.
+      if (autosaveSupported) {
+        window.showSaveFilePicker = async (options) => {
+          pickerOptions.push(options);
+          return makeHandle('granted', pickedName);
+        };
+      }
     }
   });
 
@@ -356,6 +361,28 @@ describe('choosing which file autosave writes to', () => {
 
     const note = session.document.querySelector('.save-note').textContent;
     expect(note).not.toMatch(/not the file you have open/i);
+  });
+});
+
+describe('a browser without the File System Access API', () => {
+  // Hiding the control and saying nothing cost a long investigation: the
+  // tracker looked identical to one where autosave simply was not working.
+
+  test('says why autosave is unavailable instead of hiding silently', async () => {
+    const session = boot({ autosaveSupported: false });
+    await waitFor(() => session.document.querySelector('.save-note').textContent.includes('Save Updated HTML'));
+
+    const note = session.document.querySelector('.save-note').textContent;
+    expect(note).toMatch(/File System Access API/i);
+    expect(session.document.getElementById('autosaveBtn').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a supported browser is not told about any of that', async () => {
+    const session = boot();
+    await waitFor(() => !session.document.getElementById('autosaveBtn').classList.contains('hidden'));
+
+    expect(session.document.querySelector('.save-note').textContent)
+      .not.toMatch(/File System Access API/i);
   });
 });
 

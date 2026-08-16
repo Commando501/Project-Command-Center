@@ -105,7 +105,15 @@ export function boot() {
 
   const DEFAULT_SAVE_DETAIL =
     'Inline changes stay in memory while this page is open. '
-    + 'Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.';
+    + 'Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.'
+    // A hidden control is indistinguishable from a broken one. Without this,
+    // a browser that withholds the API looks exactly like a browser where
+    // autosave is silently failing, and there is nothing on screen to tell
+    // anyone which. Downloads keep working either way.
+    + (isAutosaveSupported(globalThis)
+      ? ''
+      : ' Autosave is unavailable here: this browser does not expose the File System Access API. '
+        + 'Chrome and Edge do. Brave keeps it behind a flag. Firefox and Safari do not implement it.');
 
   const refreshSaveState = () => {
     const note = els.saveStateText.closest('.save-note');
