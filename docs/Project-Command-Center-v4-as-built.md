@@ -56,7 +56,7 @@ src/
 ```
 
 `scripts/` holds the build, the build validator, and the manifest generator.
-`tests/` holds 509 tests across 26 files.
+`tests/` holds 517 tests across 27 files.
 
 ---
 
@@ -277,6 +277,13 @@ against the published digest without trusting the pipeline.
 
 Output is unminified on purpose. Users are asked to trust this file with their
 data and to verify its hash; keeping it readable makes that meaningful.
+
+The build refuses to overwrite an existing artifact whose capsule contains
+projects. `dist/` is gitignored and the build reuses one filename, so a
+tracker kept there is destroyed by the next build with nothing to restore
+from. `PCC_ALLOW_OVERWRITE=1` overrides. The check runs after bundling and
+before writing, so a refusal cannot leave a partial file, and a fresh
+checkout, CI, and the ordinary rebuild loop all see zero projects and proceed.
 
 `validate-build.mjs` enforces: exactly one of each marker pair, no legacy
 marker, no external script or stylesheet, no remote resource, no unresolved
