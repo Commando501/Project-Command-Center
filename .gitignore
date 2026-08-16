@@ -3,3 +3,10 @@ dist/*
 !dist/.gitkeep
 coverage/
 .DS_Store
+
+# A working tracker or a data export landing in the repo root is user data, not
+# project source, and must never be committed. Both arrive there easily: the
+# build emits tracker filenames, and the app exports backups under fixed names.
+# Anchored to the root, so legacy/Project-Command-Center-v3.html stays tracked.
+/Project-Command-Center-*.html
+/Project-Command-Center-Backup*.json

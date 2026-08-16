@@ -34,6 +34,7 @@ src/
     image-optimizer.js  pure encode policy: limits, target dimensions, ranking
     image-pipeline.js   browser I/O: decode, canvas, encode, embed
   persistence/
+    autosave.js       in-place writing: handle store, permissions, scheduler
     markers.js        the four permanent markers, assembled from fragments
     data-capsule.js   schema 4 capsule, preferences, legacy v3 adapter
     extract.js        reads a capsule out of v4 or legacy v3 HTML
@@ -55,7 +56,7 @@ src/
 ```
 
 `scripts/` holds the build, the build validator, and the manifest generator.
-`tests/` holds 491 tests across 25 files.
+`tests/` holds 517 tests across 27 files.
 
 ---
 
@@ -106,8 +107,36 @@ captures `document.documentElement.outerHTML` at boot, before anything mutates
 the DOM, and refuses to run twice. Capturing after render would bake rendered
 project cards into every saved file.
 
-Saving injects the current capsule into that captured shell and downloads the
-result. The file on disk is never modified.
+Saving injects the current capsule into that captured shell. `Save Updated
+HTML` downloads the result and never modifies the file on disk.
+
+**Autosave writes that same output in place**, to a file the user explicitly
+granted through the File System Access API. It is off until switched on, and
+`persistence/autosave.js` owns it. Three things make it safe:
+
+- `createWritable()` writes to a swap file and commits on `close()`, so a
+  crash or a full disk leaves the original intact rather than half-rewritten.
+  A failed write aborts the swap file instead of committing it.
+- Both routes build their bytes through one function, `buildCurrentHtml()`, so
+  autosave and manual save cannot drift apart. It throws on a shell whose
+  markers are missing or duplicated, so nothing that fails marker validation
+  can reach a file.
+- The scheduler coalesces a burst of edits into one write and never runs two
+  concurrently — the tracker embeds its images, so a save can be tens of
+  megabytes. An edit arriving mid-write produces exactly one follow-up. A
+  failed write stops autosave rather than retrying, because a revoked
+  permission would otherwise fail on every keystroke.
+
+The handle is persisted in IndexedDB, keyed by the page's own URL. That key
+matters: every `file://` page shares one storage origin, so a bare key would
+let two trackers adopt each other's save target. Permission is not guaranteed
+to survive a browser restart, so a stored handle whose permission has lapsed
+offers a button rather than resuming silently — prompting requires a real
+click.
+
+The update pipeline is deliberately not routed through this. An update still
+produces a new versioned file and never touches the running one, which is what
+keeps the previous file usable as a rollback.
 
 Two escaping rules matter in `serializeForEmbeddedJson`:
 
@@ -220,9 +249,18 @@ be a guaranteed future outage.
 
 - `file://` **is** a secure context; `crypto.subtle` is available, so update
   verification works from disk.
-- The File System Access API is **not** available from `file://`
-  (`showSaveFilePicker` is undefined), so saving in place or choosing a
-  destination folder is impossible. Downloads are the only route.
+- The File System Access API **is** available from `file://` and fully
+  working. Retested 2026-08-15 in Chrome 151: picker opens, permission is
+  granted on pick, and a second write to the same handle commits with no new
+  dialog. An earlier note here claimed `showSaveFilePicker` was undefined;
+  that reading was taken on an opaque origin rather than a real `file://`
+  page. Verify `location.protocol === 'file:'` before trusting any such
+  result. Firefox and Safari still do not implement the API, so the autosave
+  control is hidden there and downloads remain the only route.
+- localStorage on `file://` holds roughly 5 M characters and **every local
+  file shares one origin bucket** — two probe files in different directories
+  read each other's keys. Anything stored per-file must carry the file's own
+  path in its key.
 - Release assets are CORS-blocked from `file://`; the API is not.
 - Chrome logs an "Unsafe attempt to load URL ... 'file:' URLs are treated as
   unique security origins" warning for any local page, including legacy v3. It
@@ -239,6 +277,13 @@ against the published digest without trusting the pipeline.
 
 Output is unminified on purpose. Users are asked to trust this file with their
 data and to verify its hash; keeping it readable makes that meaningful.
+
+The build refuses to overwrite an existing artifact whose capsule contains
+projects. `dist/` is gitignored and the build reuses one filename, so a
+tracker kept there is destroyed by the next build with nothing to restore
+from. `PCC_ALLOW_OVERWRITE=1` overrides. The check runs after bundling and
+before writing, so a refusal cannot leave a partial file, and a fresh
+checkout, CI, and the ordinary rebuild loop all see zero projects and proceed.
 
 `validate-build.mjs` enforces: exactly one of each marker pair, no legacy
 marker, no external script or stylesheet, no remote resource, no unresolved

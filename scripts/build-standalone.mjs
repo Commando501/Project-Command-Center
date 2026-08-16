@@ -20,6 +20,7 @@ import {
   LOCAL_REPOSITORY_SLUG,
   REPOSITORY_SLUG_PATTERN
 } from '../src/updater/app-metadata.js';
+import { assertSafeToOverwrite } from './build-guard.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT_DIR = join(ROOT, 'dist');
@@ -100,8 +101,12 @@ export async function buildStandalone() {
   html = substitute(html, '{{PCC_BUNDLE}}', await bundleApplication());
 
   const filename = `Project-Command-Center-v${appVersion}.html`;
+  const outputPath = join(OUTPUT_DIR, filename);
   await mkdir(OUTPUT_DIR, { recursive: true });
-  await writeFile(join(OUTPUT_DIR, filename), html, 'utf8');
+  // Checked after the build succeeds but before anything is written, so a
+  // refusal costs nothing and a partial write is impossible.
+  await assertSafeToOverwrite(outputPath);
+  await writeFile(outputPath, html, 'utf8');
 
   return { filename, path: join(OUTPUT_DIR, filename), appVersion, repository, bytes: Buffer.byteLength(html) };
 }

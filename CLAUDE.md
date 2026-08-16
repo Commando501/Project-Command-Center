@@ -50,7 +50,9 @@ required by the approved v4 design.
 
 ## Data safety
 
-Never overwrite the user's currently opened HTML file.
+The update pipeline must never overwrite the user's currently opened HTML
+file. An update always produces a new versioned file, leaving the previous one
+intact as the rollback copy.
 
 Updates must use:
 
@@ -62,6 +64,17 @@ current data
 → generate new HTML
 
 If migration or validation fails, produce no upgraded application.
+
+Saving the user's own edits is a different operation from updating, and may
+write in place to a file handle the user explicitly granted. Scoped on
+2026-08-15, after the File System Access API was verified working from
+`file://` in Chrome 151. In-place writing must:
+
+- require an explicit opt-in that can be revoked at any time
+- commit atomically, never streaming into the live file
+- refuse to write a shell that fails marker validation
+- never become the only route out: Save Updated HTML and Export JSON Backup
+  remain available and unchanged
 
 Never transmit project data during update checks.
 
