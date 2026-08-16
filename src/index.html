@@ -39,7 +39,14 @@
 
     <div class="save-note">
       <span class="unsaved-dot" id="unsavedDot"></span>
-      <div><strong id="saveStateText">All embedded data is current.</strong> Inline changes stay in memory while this page is open. Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.</div>
+      <div class="save-note-body">
+        <strong id="saveStateText">All embedded data is current.</strong>
+        <span id="saveNoteDetail">Inline changes stay in memory while this page is open. Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.</span>
+      </div>
+      <div class="save-note-actions">
+        <button class="btn small hidden" id="autosaveBtn" type="button">Autosave to a file…</button>
+        <button class="btn small ghost hidden" id="autosaveOffBtn" type="button">Turn off autosave</button>
+      </div>
     </div>
 
     <div class="update-banner hidden" id="updateBanner" role="status" aria-live="polite">

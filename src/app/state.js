@@ -42,12 +42,18 @@ export function createAppState(capsule, nowIso = () => new Date().toISOString())
     // timestamp into the capsule would mark the document dirty on every open
     // and prompt an unsaved-changes warning the user never caused.
     lastUpdateCheckAt: null,
-    lastUpdateCheckStatus: null
+    lastUpdateCheckStatus: null,
+    // Set by the autosave wiring when a file handle is active. Session-only.
+    onDirty: null
   };
 }
 
 export function markDirty(state) {
   state.dirty = true;
+  // Single notification point for autosave. Every mutation routes through here,
+  // so the scheduler cannot miss an edit the way per-call-site hooks would.
+  // Guarded: a listener fault must never break a user edit.
+  try { state.onDirty?.(); } catch { /* autosave reports its own failures */ }
 }
 
 export function markSaved(state) {

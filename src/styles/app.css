@@ -120,6 +120,27 @@ a { color: var(--accent); }
   font-size: .92rem;
 }
 .save-note strong { color: var(--text); }
+.save-note-body { flex: 1; min-width: 0; }
+.save-note-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+
+/* Autosave on: the warning styling would be misleading, since nothing is unsaved. */
+.save-note.autosaving {
+  border-color: color-mix(in srgb, var(--success) 42%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--panel));
+}
+.save-note.autosave-error {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  background: color-mix(in srgb, var(--danger) 9%, var(--panel));
+}
+.autosave-target {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .save-note { flex-direction: column; align-items: stretch; }
+  .save-note-actions .btn { flex: 1; }
+}
 
 .dashboard {
   display: grid;

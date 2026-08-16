@@ -31,6 +31,15 @@ import {
 } from './content/image-optimizer.js';
 import { captureShell, getCapturedShell } from './persistence/html-shell.js';
 import {
+  autosaveTargetKey,
+  createAutosaveScheduler,
+  createHandleStore,
+  ensureWritePermission,
+  isAutosaveSupported,
+  pickAutosaveTarget,
+  writeHtmlToHandle
+} from './persistence/autosave.js';
+import {
   buildProjectsJsonBackup,
   injectDataCapsuleIntoShell
 } from './persistence/standalone-export.js';
@@ -51,7 +60,8 @@ function collectElements() {
     'metricTotal', 'metricActive', 'metricPlanning', 'metricBlocked', 'metricComplete',
     'cardViewBtn', 'tableViewBtn', 'saveHtmlBtn', 'backupBtn', 'addProjectBtn',
     'themeBtn', 'saveProjectBtn', 'cancelProjectBtn', 'closeDialogBtn',
-    'closeLightboxBtn', 'closeReoptBtn', 'cancelReoptBtn', 'chooseReoptSourceBtn'
+    'closeLightboxBtn', 'closeReoptBtn', 'cancelReoptBtn', 'chooseReoptSourceBtn',
+    'autosaveBtn', 'autosaveOffBtn', 'saveNoteDetail'
   ];
   return Object.fromEntries(ids.map(id => [id, $(id)]));
 }
@@ -79,11 +89,50 @@ export function boot() {
     toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600);
   };
 
+  // In-place autosave. Session state only; the stored file handle is the
+  // persistent part, and its presence is what "autosave is on" means.
+  const autosave = {
+    supported: isAutosaveSupported(globalThis),
+    handle: null,
+    active: false,
+    status: null,
+    store: null
+  };
+
+  const DEFAULT_SAVE_DETAIL =
+    'Inline changes stay in memory while this page is open. '
+    + 'Use <strong>Save Updated HTML</strong> to generate a new self-contained copy.';
+
   const refreshSaveState = () => {
+    const note = els.saveStateText.closest('.save-note');
+    const failed = autosave.status?.state === 'error';
+
+    if (note) {
+      note.classList.toggle('autosaving', autosave.active && !failed);
+      note.classList.toggle('autosave-error', failed);
+    }
+
+    if (autosave.active) {
+      const busy = autosave.status?.state === 'pending' || autosave.status?.state === 'writing';
+      els.unsavedDot.classList.toggle('show', busy);
+      els.saveStateText.textContent = busy ? 'Saving…' : 'Saved to your file.';
+      if (els.saveNoteDetail) {
+        els.saveNoteDetail.innerHTML =
+          `Autosaving to <span class="autosave-target">${escapeHtml(autosave.handle?.name || 'your file')}</span>. `
+          + 'Updates still create a new file and never overwrite this one.';
+      }
+      return;
+    }
+
     els.unsavedDot.classList.toggle('show', state.dirty);
-    els.saveStateText.textContent = state.dirty
-      ? 'You have unsaved changes.'
-      : 'All embedded data is current.';
+    els.saveStateText.textContent = failed
+      ? 'Autosave stopped.'
+      : (state.dirty ? 'You have unsaved changes.' : 'All embedded data is current.');
+    if (els.saveNoteDetail) {
+      els.saveNoteDetail.innerHTML = failed
+        ? `${escapeHtml(autosave.status.message)} Your work is still here — use <strong>Save Updated HTML</strong>, or switch autosave back on.`
+        : DEFAULT_SAVE_DETAIL;
+    }
   };
 
   const draw = () => {
@@ -105,7 +154,7 @@ export function boot() {
 
   const saveUpdatedHtml = () => {
     try {
-      const html = injectDataCapsuleIntoShell(getCapturedShell(), toDataCapsule(state));
+      const html = buildCurrentHtml();
       downloadBlob(
         `Project-Command-Center-v${metadata.appVersion}.html`,
         html,
@@ -127,6 +176,131 @@ export function boot() {
       'application/json;charset=utf-8'
     );
     showToast('JSON backup downloaded.');
+  };
+
+  /**
+   * The exact bytes "Save Updated HTML" produces. Autosave and manual save
+   * share this single path so they can never drift apart, and because
+   * `injectDataCapsuleIntoShell` throws on a shell whose markers are missing
+   * or duplicated, nothing that fails marker validation reaches a file.
+   */
+  const buildCurrentHtml = () =>
+    injectDataCapsuleIntoShell(getCapturedShell(), toDataCapsule(state));
+
+  const autosaveScheduler = createAutosaveScheduler({
+    write: async () => {
+      if (!autosave.handle || !autosave.active) return;
+      const html = buildCurrentHtml();
+      await writeHtmlToHandle(autosave.handle, html);
+      markSaved(state);
+    },
+    onStatus: (status) => {
+      autosave.status = status;
+      if (status.state === 'error') {
+        // Stop rather than retry: a revoked permission or a deleted file
+        // would otherwise fail on every keystroke.
+        autosave.active = false;
+        showToast(`Autosave stopped: ${status.message}`);
+        refreshAutosaveControls();
+      }
+      refreshSaveState();
+    }
+  });
+
+  function refreshAutosaveControls() {
+    if (!els.autosaveBtn || !els.autosaveOffBtn) return;
+    if (!autosave.supported) {
+      els.autosaveBtn.classList.add('hidden');
+      els.autosaveOffBtn.classList.add('hidden');
+      return;
+    }
+    const needsPermission = Boolean(autosave.handle) && !autosave.active;
+    els.autosaveBtn.classList.toggle('hidden', autosave.active);
+    els.autosaveBtn.textContent = needsPermission
+      ? `Resume autosave to ${autosave.handle.name}`
+      : 'Autosave to a file…';
+    els.autosaveOffBtn.classList.toggle('hidden', !autosave.handle);
+  }
+
+  /** Runs from a click, so it is allowed to show the picker and to prompt. */
+  const enableAutosave = async () => {
+    try {
+      if (!autosave.handle) {
+        autosave.handle = await pickAutosaveTarget(
+          globalThis,
+          `Project-Command-Center-v${metadata.appVersion}.html`
+        );
+        await autosave.store?.save(autosave.handle);
+      }
+      const permission = await ensureWritePermission(autosave.handle, { interactive: true });
+      if (permission !== 'granted') {
+        autosave.handle = null;
+        await autosave.store?.clear();
+        showToast('Autosave needs permission to write that file.');
+        refreshAutosaveControls();
+        refreshSaveState();
+        return;
+      }
+      autosave.active = true;
+      autosave.status = null;
+      state.onDirty = () => autosaveScheduler.schedule();
+      refreshAutosaveControls();
+      // Write once immediately so the file matches what is on screen.
+      autosaveScheduler.schedule();
+      await autosaveScheduler.flush();
+      showToast(`Autosaving to ${autosave.handle.name}.`);
+    } catch (error) {
+      // AbortError just means the user closed the picker.
+      if (error?.name !== 'AbortError') {
+        showToast(error?.message || 'Could not turn on autosave.');
+      }
+      refreshAutosaveControls();
+      refreshSaveState();
+    }
+  };
+
+  const disableAutosave = async () => {
+    autosaveScheduler.cancel();
+    state.onDirty = null;
+    autosave.active = false;
+    autosave.handle = null;
+    autosave.status = null;
+    await autosave.store?.clear();
+    refreshAutosaveControls();
+    refreshSaveState();
+    showToast('Autosave off. Use Save Updated HTML to keep changes.');
+  };
+
+  /**
+   * Reconnects to the file this tracker was already autosaving to.
+   *
+   * Permission is not guaranteed to survive a browser restart, so a stored
+   * handle whose permission has lapsed does not silently resume — it offers a
+   * button, because prompting requires a real click.
+   */
+  const initAutosave = async () => {
+    if (!autosave.supported) {
+      refreshAutosaveControls();
+      return;
+    }
+    autosave.store = createHandleStore({ key: autosaveTargetKey(globalThis) });
+    refreshAutosaveControls();
+
+    const stored = await autosave.store.load();
+    if (!stored) return;
+
+    const permission = await ensureWritePermission(stored, { interactive: false });
+    if (permission === 'denied') {
+      await autosave.store.clear();
+      return;
+    }
+    autosave.handle = stored;
+    if (permission === 'granted') {
+      autosave.active = true;
+      state.onDirty = () => autosaveScheduler.schedule();
+    }
+    refreshAutosaveControls();
+    refreshSaveState();
   };
 
   const setView = (view) => {
@@ -301,6 +475,8 @@ export function boot() {
   els.cardViewBtn.addEventListener('click', () => setView('cards'));
   els.tableViewBtn.addEventListener('click', () => setView('table'));
   els.saveHtmlBtn.addEventListener('click', saveUpdatedHtml);
+  els.autosaveBtn?.addEventListener('click', enableAutosave);
+  els.autosaveOffBtn?.addEventListener('click', disableAutosave);
   els.backupBtn.addEventListener('click', exportJson);
   els.themeBtn.addEventListener('click', () => document.body.classList.toggle('light'));
 
@@ -479,7 +655,11 @@ export function boot() {
   });
 
   window.addEventListener('beforeunload', event => {
-    if (!state.dirty) return;
+    // Best effort: start the pending write now rather than after the debounce.
+    // beforeunload cannot await it, which is exactly why the warning below
+    // still fires while a write is outstanding.
+    if (autosave.active && autosaveScheduler.isPending()) autosaveScheduler.flush();
+    if (!state.dirty && !autosaveScheduler.isPending()) return;
     event.preventDefault();
     event.returnValue = '';
   });
@@ -498,6 +678,10 @@ export function boot() {
 
   draw();
   setView(state.currentView);
+
+  // Never awaited: reconnecting to a stored handle must not delay the tracker,
+  // and a storage backend that never answers is time-boxed inside the store.
+  initAutosave();
 
   // The tracker is fully rendered and interactive before the updater is even
   // constructed, and the check that follows is never awaited. A slow, blocked,
